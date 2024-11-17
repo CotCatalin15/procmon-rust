@@ -1,0 +1,41 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+repository = "https://github.com/CotCatalin15/procmon-engine"
+#readme = ""
+#license = ""
+
+[workspace.dependencies]
+procmon-core = { path = "crates/procmon-core", version = "0.1.0" }
+procmon-client = { path = "crates/procmon-client", version = "0.1.0" }
+
+#Common
+serde = { version = "1.0.208", default-features = false, features = [
+    "serde_derive",
+    "alloc",
+] }
+postcard = { version = "1.0.10", features = ["postcard-derive"] }
+nt-string = { version = "0.1.1", default-features = false, features = [
+    "alloc",
+] }
+
+#Shared
+anyhow = { version = "1.0.35", default-features = false }
+thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
+
+#Usermode only
+tracing = { version = "0.1.40" }
+tracing-subscriber = { version = "0.3.18" }
+
+[profile.dev-abort]
+inherits = "dev"
+panic = "abort"
+lto = true
+
+[profile.release-abort]
+inherits = "release"
+panic = "abort"
+lto = true

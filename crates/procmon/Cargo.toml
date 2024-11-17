@@ -1,0 +1,57 @@
+[package]
+name = "procmon"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+
+windows-sys = { version = "0.52", features = [
+    "Wdk_Foundation",
+    "Wdk_Storage",
+    "Win32_Storage",
+    "Win32",
+    "Win32_Storage_FileSystem",
+    "Wdk_Storage_FileSystem",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Wdk_System_SystemServices",
+    "Wdk_Storage_FileSystem_Minifilters",
+    "Win32_Storage_InstallableFileSystems",
+    "Win32_System_IO",
+    "Win32_System_Kernel",
+    "Win32_System_Power",
+    "Win32_System_WindowsProgramming",
+    "Win32_System_Threading",
+] }
+
+hashbrown = { version = "0.14.3", default-features = false, features = [
+    "inline-more",
+    "ahash",
+    "allocator-api2",
+] } #Container crates
+
+#Required for hashbrown 
+#allocator-api2 = { version = "0.2.18", default-features = false }
+#ahash = { version = "0.8.11", default-features = false }
+bitflags = { version = "2.6.0" }
+nt-string.workspace = true
+
+wdrf = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
+wdrf-std = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
+maple = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
+
+serde.workspace = true
+postcard.workspace = true
+kmum-common = { path = "../kmum-common", version = "*" }
+
+
+[build-dependencies]
+wdk-build = { git = "https://github.com/microsoft/windows-drivers-rs", version = "0.2.0", rev = "4ee4b88" }
+
+[package.metadata.wdk]

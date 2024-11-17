@@ -1,0 +1,24 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.build]
+dependencies = ["build-all"]
+
+[tasks.build-usermode]
+description = "Builds the usermode applications (procmon-core and procmon-client)"
+workspace = false
+command = "cargo"
+args = ["build", "--workspace", "--exclude", "procmon"]
+
+[tasks.build-driver]
+description = "Builds the driver (procmon)"
+workspace = false
+cwd = "crates/procmon"
+command = "cargo"
+#make this
+args = ["make", "default", "--profile", "dev-abort"]
+
+[tasks.build-all]
+description = "Builds all crates (procmon-core, procmon-client, and procmon)"
+workspace = false
+dependencies = ["build-usermode", "build-driver"]

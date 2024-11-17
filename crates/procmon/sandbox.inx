@@ -1,0 +1,108 @@
+;;;
+;;; Rust minifilter driver
+;;;
+;;; Copyright (C) EU
+;;;
+
+[Version]
+Signature         = "$Windows NT$"
+Class             = "ActivityMonitor"                      ;This is determined by the work this filter driver does
+ClassGuid         = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2} ;This value is determined by the Class
+Provider          = %Msft%
+DriverVer         = ;
+DriverPackageType = KernelService
+PnpLockdown       = 1
+
+[DestinationDirs]
+DefaultDestDir               = 12
+MiniFilter.CopyDriverFiles   = 12 ;%windir%\system32\drivers
+MiniFilter.DeleteDriverFiles = 12 ;%windir%\system32\drivers
+
+;;
+;; Default install sections
+;;
+[DefaultInstall.NTamd64]
+OptionDesc = %ServiceDescription%
+CopyFiles  = MiniFilter.CopyDriverFiles
+
+[DefaultInstall.NTamd64.Services]
+AddService = %ServiceName%,,MiniFilter.Service
+
+
+;;
+;; Default uninstall sections
+;;
+[DefaultUninstall.NTamd64]
+DelFiles = MiniFilter.DeleteDriverFiles
+LegacyUninstall=1
+
+[DefaultUninstall.NTamd64.Services]
+DelService = %ServiceName%,0x200 ;Ensure service is stopped before deleting
+LegacyUninstall=1
+
+;;
+;; Services Section
+;;
+[MiniFilter.Service]
+DisplayName    = %ServiceName%
+Description    = %ServiceDescription%
+ServiceBinary  = %12%\%DriverName%.sys ;%windir%\system32\drivers\
+Dependencies   = 
+ServiceType    = 2                     ;SERVICE_FILE_SYSTEM_DRIVER
+StartType      = 3                     ;SERVICE_DEMAND_START
+ErrorControl   = 1                     ;SERVICE_ERROR_NORMAL
+LoadOrderGroup = "Boot Bus Extender"
+AddReg         = MiniFilter.AddRegistry
+
+[MiniFilter.BootService]
+DisplayName    = %ServiceName%
+Description    = %ServiceDescription%
+ServiceBinary  = %12%\%DriverName%.sys ;%windir%\system32\drivers\
+Dependencies   = 
+ServiceType    = 2                     ;SERVICE_FILE_SYSTEM_DRIVER
+StartType      = 0                     ;SERVICE_BOOT_START 0
+ErrorControl   = 1                     ;SERVICE_ERROR_NORMAL
+LoadOrderGroup = "BootBusExtender"
+AddReg         = MiniFilter.AddRegistry
+
+;;
+;; Registry Modifications
+;;
+[MiniFilter.AddRegistry]
+;HKR,,"DebugFlags",0x00010001 ,0x0
+HKR,,"SupportedFeatures",0x00010001,0x8 ;SUPPORTED_FS_FEATURES_BYPASS_IO
+HKR,"Instances","DefaultInstance",0x00000000,%DefaultInstance%
+HKR,"Instances\"%Instance1.Name%,"Altitude",0x00000000,%Instance1.Altitude%
+HKR,"Instances\"%Instance1.Name%,"Flags",0x00010001,%Instance1.Flags%
+HKR,,BDM,0x10001,0x0, ;bug check detection mechanism configuration value
+
+;;
+;; Copy Files
+;;
+[MiniFilter.CopyDriverFiles]
+%DriverName%.sys
+
+[MiniFilter.DeleteDriverFiles]
+%DriverName%.sys
+
+[SourceDisksFiles]
+procmon.sys = 1,,
+
+[SourceDisksNames]
+1 = %DiskId1%,,,
+
+;;
+;; String Section
+;;
+[Strings]
+Msft               = "EU"
+ServiceDescription = "Test minifilter driver"
+ServiceName        = "procmon"
+DriverName         = "procmon"
+DiskId1            = "procmon Device Installation Disk"
+
+;; Instances specific information.
+DefaultInstance    = "procmon Instance"
+Instance1.Name     = "procmon Instance"
+Instance1.Altitude = "320770"
+Instance1.Flags    = 0x0 ;Allow all attachments

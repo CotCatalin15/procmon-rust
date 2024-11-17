@@ -1,0 +1,1 @@
+RunDLL32.Exe syssetup,SetupInfObjectInstallAction DefaultInstall 128 %CD%\procmon.inf

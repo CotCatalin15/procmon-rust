@@ -1,0 +1,30 @@
+[package]
+name = "procmon-core"
+version = "0.1.0"
+edition.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+windows-sys = { version = "0.52", features = [
+    "Win32_Storage",
+    "Win32_Storage_InstallableFileSystems",
+    "Win32_System_IO",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Diagnostics",
+    "Win32_System_Diagnostics_Debug",
+] }
+
+kmum-common = { path = "../kmum-common", version = "*" }
+
+serde.workspace = true
+postcard.workspace = true
+nt-string.workspace = true
+
+tracing.workspace = true
