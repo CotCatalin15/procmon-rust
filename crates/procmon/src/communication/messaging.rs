@@ -1,9 +1,8 @@
 use kmum_common::{KmMessage, KmReplyMessage, UmReplyMessage, UmSendMessage};
 use maple::error;
 use nt_string::unicode_string::NtUnicodeStr;
-use wdrf::minifilter::{
-    communication::client_communication::{FltClientCommunication, FltCommunicationCallback},
-    FltFilter,
+use wdrf::minifilter::communication::client_communication::{
+    FltClientCommunication, FltCommunicationCallback,
 };
 use wdrf_std::{
     boxed::{Box, BoxExt},
@@ -33,11 +32,10 @@ pub struct Messaging {
 impl Messaging {
     pub fn try_create<CB: MessagingCallback + TaggedObject + 'static>(
         callback: CB,
-        filter: FltFilter,
         name: NtUnicodeStr,
     ) -> anyhow::Result<Self, CommunicationError> {
         let callback = MessagingPortCallback::try_new(callback)?;
-        let port_communication = FltClientCommunication::new(callback, filter, name)
+        let port_communication = FltClientCommunication::new(callback, name)
             .inspect_err(|e| {
                 error!("Failed to create flt client communication: {:#?}", e);
             })
@@ -47,6 +45,35 @@ impl Messaging {
             communication: port_communication,
             free_buffered: StackSpinMutex::new(Vec::create()),
         })
+    }
+
+    pub fn send_no_reply(
+        &self,
+        message: &KmMessage,
+        timeout: Timeout,
+    ) -> anyhow::Result<(), CommunicationError> {
+        let mut buf = {
+            let handle = InStackLockHandle::new();
+            let mut guard = self.free_buffered.lock(&handle);
+
+            if let Some(buf) = guard.pop() {
+                buf
+            } else {
+                if let Ok(buf) = MessageBuffer::try_create(true) {
+                    buf
+                } else {
+                    return Err(CommunicationError::NotEnoughMemory);
+                }
+            }
+        };
+
+        let send_slice = postcard::to_slice(message, &mut buf.send_buffer)
+            .map_err(|_| CommunicationError::ParseError)?;
+
+        self.communication
+            .send_message(&send_slice, Timeout::infinite())
+            .inspect_err(|e| error!("Failed to send message: {:#?}", e))
+            .map_err(|_| CommunicationError::PortError)
     }
 
     pub fn send_with_reply(

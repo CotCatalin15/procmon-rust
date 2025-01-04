@@ -19,7 +19,6 @@ pub const MAX_UM_SEND_MESSAGE_BUFFER_SIZE: usize = 32 * 1024;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KmMessage {
     CreateFile(SerializableNtString),
-    WriteFile(SerializableNtString),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

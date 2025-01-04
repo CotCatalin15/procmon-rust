@@ -1,8 +1,7 @@
 use maple::{error, info};
 use nt_string::unicode_string::NtUnicodeStr;
-use wdrf::minifilter::{
-    communication::client_communication::{FltClientCommunication, FltCommunicationCallback},
-    FltFilter,
+use wdrf::minifilter::communication::client_communication::{
+    FltClientCommunication, FltCommunicationCallback,
 };
 use wdrf_std::time::Timeout;
 use wdrf_std::NtResult;
@@ -37,8 +36,8 @@ pub struct PortCommunication {
 }
 
 impl PortCommunication {
-    pub fn try_create(filter: FltFilter, name: NtUnicodeStr) -> anyhow::Result<Self> {
-        let communication = FltClientCommunication::new(CommunncationCallback {}, filter, name);
+    pub fn try_create(name: NtUnicodeStr) -> anyhow::Result<Self> {
+        let communication = FltClientCommunication::new(CommunncationCallback {}, name);
         if let Err(status) = communication {
             error!("FltClientCommunication failed with status: {status}");
             anyhow::bail!("Failed to create flt communication");

@@ -1,4 +1,3 @@
-use dispatcher::{Dispatcher, FilterBufferHandler};
 use kmum_common::{KmMessage, UmReplyMessage, UmSendMessage};
 use nt_string::unicode_string::NtUnicodeString;
 use processor::{CommunicationProcessor, MessageProcessor};
@@ -48,14 +47,6 @@ impl MessageProcessor for CommunicationMessageHandler {
     ) -> anyhow::Result<Option<UmReplyMessage>, CommunicationError> {
         info!("Received message from kernel: {:#?}", message);
 
-        match message {
-            KmMessage::CreateFile(file) => {
-                let mut redirect_path = file.clone();
-                redirect_path.try_push_str("_Redirected.exe").unwrap();
-
-                Ok(Some(UmReplyMessage::Redirect(redirect_path.into())))
-            }
-            KmMessage::WriteFile(_buffer) => Ok(Some(UmReplyMessage::Reply(true))),
-        }
+        Ok(None)
     }
 }
