@@ -8,6 +8,12 @@ use serde::{de::Visitor, Deserialize, Serialize};
 
 pub struct SerializableNtString(NtUnicodeString);
 
+impl SerializableNtString {
+    pub fn new(nt_str: NtUnicodeString) -> Self {
+        Self(nt_str)
+    }
+}
+
 impl Debug for SerializableNtString {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         Display::fmt(&self.0, f)

@@ -22,8 +22,8 @@ impl FilterMessageBuffer {
         &mut self.buffer
     }
 
-    pub fn as_parsed(&self) -> ParsedMessage<'_> {
-        ParsedMessage::new(&self.buffer)
+    pub fn as_parsed(&self, msg_size: usize) -> ParsedMessage<'_> {
+        ParsedMessage::new(&self.buffer[..msg_size])
     }
 }
 

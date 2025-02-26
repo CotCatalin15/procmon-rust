@@ -8,7 +8,10 @@ use kmum_common::{
 };
 use windows_sys::Win32::{
     Foundation::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL, WAIT_OBJECT_0},
-    System::Threading::{WaitForMultipleObjects, INFINITE},
+    System::{
+        Threading::{WaitForMultipleObjects, INFINITE},
+        IO::GetOverlappedResult,
+    },
 };
 
 use crate::win::{constatns::WAIT_OBJECT_1, event::Event, overlapped::Overlapped};
@@ -114,8 +117,22 @@ impl Worker {
                 ),
             }
 
+            let message_size = unsafe {
+                let mut transfered: u32 = 0;
+                if 0 == GetOverlappedResult(
+                    inner.raw_communication.handle(),
+                    overlapped.ov(),
+                    &mut transfered,
+                    false as _,
+                ) {
+                    panic!("GetOverlappedResult returned false");
+                }
+
+                transfered
+            } as usize;
+
             {
-                let send_parsed = send_buffer.as_parsed();
+                let send_parsed = send_buffer.as_parsed(message_size);
                 let mut reply_parsed = reply_buffer.as_parsed();
 
                 let result = inner
