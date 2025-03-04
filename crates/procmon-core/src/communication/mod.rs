@@ -1,7 +1,8 @@
-use kmum_common::{KmMessage, KmReplyMessage, UmReplyMessage, UmSendMessage};
-use nt_string::unicode_string::NtUnicodeString;
-use processor::{CommunicationProcessor, KmMessageIterator, MessageProcessor};
+use kmum_common::{KmReplyMessage, UmSendMessage};
+use processor::CommunicationProcessor;
+use processor::{KmMessageIterator, MessageProcessor};
 use tracing::info;
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
 mod dispatcher;
 mod message_handler;
@@ -42,6 +43,10 @@ struct CommunicationMessageHandler {}
 impl MessageProcessor for CommunicationMessageHandler {
     fn process(&self, iter: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError> {
         for msg in iter {
+            if msg.common.pid != unsafe { GetCurrentProcessId() as u64 } {
+                continue;
+            }
+
             info!("Received message from kernel: {:#?}", msg);
         }
 

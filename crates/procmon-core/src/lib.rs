@@ -1,7 +1,7 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 
-use std::{hint::black_box, intrinsics::breakpoint, time::Duration};
+use std::hint::black_box;
 
 use communication::Communication;
 use kmum_common::UmSendMessage;
@@ -16,7 +16,7 @@ pub fn test() {
     let communication = Communication::new();
     black_box(&communication);
 
-    let pid = unsafe { GetCurrentProcessId() as u64 };
+    let _pid = unsafe { GetCurrentProcessId() as u64 };
 
     loop {
         let mut input = String::new();
@@ -45,6 +45,4 @@ pub fn test() {
             }
         }
     }
-
-    std::thread::sleep(Duration::MAX);
 }

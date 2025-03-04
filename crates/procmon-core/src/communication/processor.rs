@@ -1,6 +1,4 @@
-use kmum_common::{
-    KmMessage, KmReplyMessage, UmReplyMessage, UmSendMessage, MAX_UM_SEND_MESSAGE_BUFFER_SIZE,
-};
+use kmum_common::{KmMessage, KmReplyMessage, UmSendMessage, MAX_UM_SEND_MESSAGE_BUFFER_SIZE};
 
 use super::{
     dispatcher::{Dispatcher, FilterBufferHandler},

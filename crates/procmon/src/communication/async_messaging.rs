@@ -251,7 +251,7 @@ impl Worker {
 
             if offset != 0 {
                 maple::info!("Send {serliazed_items_count} remaining serialized items to usermode");
-                communication.send_message(&buffer[..offset], Timeout::infinite());
+                let _ = communication.send_message(&buffer[..offset], Timeout::infinite());
             }
         }
     }

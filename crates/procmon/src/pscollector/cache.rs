@@ -1,7 +1,6 @@
 use kmum_common::{
     krnmsg::{KmMessageCommonHeader, KmMessageEventKind, ProcessCreateEvent, ProcessDestroyEvent},
     process::{ProcessInformation, UniqueProcessId},
-    serializable_ntstring::SerializableNtString,
     KmMessage,
 };
 use wdrf::process::{
@@ -9,7 +8,7 @@ use wdrf::process::{
     PsCreateNotifyInfo,
 };
 use wdrf_std::{kmalloc::TaggedObject, object::ArcKernelObj, structs::PKPROCESS, time::SystemTime};
-use windows_sys::Win32::Foundation::{HANDLE, STATUS_SUCCESS};
+use windows_sys::Win32::Foundation::STATUS_SUCCESS;
 
 use crate::global::DRIVER_CONTEXT;
 
@@ -89,7 +88,7 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
         let unique_id = cache.internal_on_process_create(&process, pid, create_info);
 
         if let Some(uid) = unique_id {
-            let mut process_info = cache.get_process_info_from_uid(uid);
+            let process_info = cache.get_process_info_from_uid(uid);
 
             if let Some(process_info) = process_info {
                 let event = KmMessage {
@@ -110,7 +109,7 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
                     }),
                 };
 
-                DRIVER_CONTEXT.get().communication.try_send_event(event);
+                let _ = DRIVER_CONTEXT.get().communication.try_send_event(event);
             }
         }
 
@@ -127,7 +126,7 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
             .internal_on_process_exit(pid);
 
         if let Some(uid) = unique_id {
-            let mut process_info = cache.get_process_info_from_uid(uid);
+            let process_info = cache.get_process_info_from_uid(uid);
 
             if let Some(process_info) = process_info {
                 let event = KmMessage {
@@ -145,7 +144,7 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
                     event: KmMessageEventKind::ProcessDestroy(ProcessDestroyEvent { pid: pid }),
                 };
 
-                DRIVER_CONTEXT.get().communication.try_send_event(event);
+                let _ = DRIVER_CONTEXT.get().communication.try_send_event(event);
             }
         }
     }
