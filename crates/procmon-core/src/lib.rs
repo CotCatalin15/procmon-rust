@@ -1,11 +1,15 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 
-use std::hint::black_box;
+use std::{
+    hint::black_box,
+    thread::{self, spawn},
+    time::Duration,
+};
 
 use communication::Communication;
 use kmum_common::UmSendMessage;
-use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+use windows_sys::Win32::System::Threading::{GetCurrentProcessId, Sleep};
 
 use tracing::info;
 
@@ -17,6 +21,14 @@ pub fn test() {
     black_box(&communication);
 
     let _pid = unsafe { GetCurrentProcessId() as u64 };
+
+    let th = spawn(|| loop {
+        println!("Creating file\n");
+        std::fs::remove_file("test.txt");
+        let file = std::fs::File::create("test.txt");
+
+        thread::sleep(Duration::from_secs(5));
+    });
 
     loop {
         let mut input = String::new();

@@ -83,10 +83,16 @@ impl AsyncMessaging {
     }
 
     pub fn try_emplace_event(&self, message: KmMessage) -> anyhow::Result<(), CommunicationError> {
-        let worker_id = (message.common.thread_id as usize) % self.num_workers;
+        let worker_id = (message.event.thread as usize) % self.num_workers;
         let worker: &Worker = self.workers.get(worker_id).unwrap();
 
         worker.try_push_event(message)
+    }
+
+    pub fn stop(&self) {
+        self.workers.iter().for_each(|worker| {
+            worker.stop();
+        });
     }
 }
 
@@ -193,6 +199,13 @@ impl Worker {
         Ok(Self { handle, internal })
     }
 
+    fn stop(&self) {
+        self.internal.stop_event.signal();
+
+        let handle = InStackLockHandle::new();
+        self.internal.items.lock(&handle).clear();
+    }
+
     fn worker_routine(
         communication: Arc<FltClientCommunication<MessagingPortCallback>>,
         internal: Arc<WorkerInternal>,
@@ -271,9 +284,6 @@ impl Worker {
 
 impl Drop for Worker {
     fn drop(&mut self) {
-        self.internal.stop_event.signal();
-
-        let handle = InStackLockHandle::new();
-        self.internal.items.lock(&handle).clear();
+        self.stop();
     }
 }

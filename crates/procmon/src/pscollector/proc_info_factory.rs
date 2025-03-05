@@ -135,7 +135,7 @@ unsafe fn get_cmd_line_from_eprocess(
         return None;
     }
 
-    ke_stack_attach_process(&eprocess, || {
+    let fnc_get_cmd_line = || {
         if basic_information.PebBaseAddress.is_null()
             || (*basic_information.PebBaseAddress)
                 .ProcessParameters
@@ -161,6 +161,16 @@ unsafe fn get_cmd_line_from_eprocess(
             cmd_line.try_push_u16(buffer).ok()?;
 
             Some(cmd_line)
+        }
+    };
+
+    ke_stack_attach_process(&eprocess, || {
+        let result = microseh::try_seh(fnc_get_cmd_line);
+
+        if let Ok(result) = result {
+            result
+        } else {
+            None
         }
     })
     .ok()?

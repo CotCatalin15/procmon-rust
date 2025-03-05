@@ -1,6 +1,7 @@
 use kmum_common::{
-    krnmsg::{KmMessageCommonHeader, KmMessageEventKind, ProcessCreateEvent, ProcessDestroyEvent},
+    event::{EventClass, EventCompoent, EventProcessOperation, EventStack, SimpleProcessDetails},
     process::{ProcessInformation, UniqueProcessId},
+    serializable_ntstring::SerializableNtString,
     KmMessage,
 };
 use wdrf::process::{
@@ -8,7 +9,9 @@ use wdrf::process::{
     PsCreateNotifyInfo,
 };
 use wdrf_std::{kmalloc::TaggedObject, object::ArcKernelObj, structs::PKPROCESS, time::SystemTime};
-use windows_sys::Win32::Foundation::STATUS_SUCCESS;
+use windows_sys::{
+    Wdk::System::SystemServices::PsGetCurrentThreadId, Win32::Foundation::STATUS_SUCCESS,
+};
 
 use crate::global::DRIVER_CONTEXT;
 
@@ -91,22 +94,24 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
             let process_info = cache.get_process_info_from_uid(uid);
 
             if let Some(process_info) = process_info {
+                let op: EventProcessOperation = EventProcessOperation::ProcessCreate {
+                    pid,
+                    cmd: process_info.cmd,
+                };
                 let event = KmMessage {
-                    common: KmMessageCommonHeader {
-                        operation: kmum_common::krnmsg::KmMessageOperationType::ProcessCreate,
-                        timestamp: SystemTime::new().raw_time(),
-                        pid: pid as _,
-                        thread_id: create_info.client_id.UniqueThread as _,
-                        class: 0,
+                    event: EventCompoent {
+                        date: SystemTime::new().raw_time(),
+                        thread: create_info.client_id.UniqueThread as _,
+                        operation: EventClass::Process(op),
                         result: STATUS_SUCCESS,
                         path: process_info.path,
                         duration: 0,
-                        unique_pid: uid,
                     },
-                    event: KmMessageEventKind::ProcessCreate(ProcessCreateEvent {
-                        pid: pid,
-                        cmd: process_info.cmd,
-                    }),
+                    process: SimpleProcessDetails {
+                        pid,
+                        unique_id: uid,
+                    },
+                    stack: EventStack::new(),
                 };
 
                 let _ = DRIVER_CONTEXT.get().communication.try_send_event(event);
@@ -129,19 +134,21 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
             let process_info = cache.get_process_info_from_uid(uid);
 
             if let Some(process_info) = process_info {
+                let op: EventProcessOperation = EventProcessOperation::ProcessDestroy { pid };
                 let event = KmMessage {
-                    common: KmMessageCommonHeader {
-                        operation: kmum_common::krnmsg::KmMessageOperationType::ProcessDestroy,
-                        timestamp: SystemTime::new().raw_time(),
-                        pid: pid as _,
-                        thread_id: 0,
-                        class: 0,
+                    event: EventCompoent {
+                        date: SystemTime::new().raw_time(),
+                        thread: unsafe { PsGetCurrentThreadId() as _ },
+                        operation: EventClass::Process(op),
                         result: STATUS_SUCCESS,
-                        path: process_info.path,
+                        path: SerializableNtString::empty(),
                         duration: 0,
-                        unique_pid: uid,
                     },
-                    event: KmMessageEventKind::ProcessDestroy(ProcessDestroyEvent { pid: pid }),
+                    process: SimpleProcessDetails {
+                        pid,
+                        unique_id: uid,
+                    },
+                    stack: EventStack::new(),
                 };
 
                 let _ = DRIVER_CONTEXT.get().communication.try_send_event(event);

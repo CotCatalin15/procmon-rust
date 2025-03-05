@@ -1,16 +1,20 @@
 #![no_std]
+#![feature(let_chains)]
+#![allow(unused_attributes)]
 
 use communication::Communication;
 use global::{DriverContext, CONTEXT_REGISTRY, DBGPRINT_LOGGER, DRIVER_CONTEXT};
 use imports::DynFncImports;
-use minifilter::ProcmonMinifilterPreOp;
+use minifilter::{ProcmonMinifilterCallback, ProcmonMinifilterContext};
 use pscollector::ProcessCollectorCache;
 use wdrf::{
     context::ContextRegistry,
     logger::DbgPrintLogger,
     minifilter::filter::{
-        framework::MinifilterFramework, EmptyFltOperationsVisitor, FilterOperationVisitor,
-        MinifilterFrameworkBuilder, UnloadStatus,
+        builder::{MinifilterFrameworkBuilder, MinifilterOperationBuilder},
+        framework::MinifilterFramework,
+        registration::{FltOperationEntry, FltOperationType},
+        FilterUnload, UnloadStatus,
     },
 };
 use wdrf_std::{dbg_break, kmalloc::TaggedObject, sync::event::Event, sys::event::EventType};
@@ -68,14 +72,18 @@ fn init_logging() -> anyhow::Result<()> {
 fn setup_filter(driver: &mut DRIVER_OBJECT) -> anyhow::Result<()> {
     info!("Initializing the minifilter");
 
-    let flt_operations = [/*FltOperationEntry::new(FltOperationType::Create, 0, false)*/];
+    let flt_operations = [FltOperationEntry::new(FltOperationType::Create, 0)];
 
-    MinifilterFrameworkBuilder::new(ProcmonMinifilterPreOp {})
-        .operations(&flt_operations)
-        .filter(MinifilterUnloadStruct {}, true)
-        .post(EmptyFltOperationsVisitor {})
-        .build_and_register(&CONTEXT_REGISTRY, driver)
-        .unwrap();
+    MinifilterFrameworkBuilder::new_with_context(
+        || {
+            MinifilterOperationBuilder::new()
+                .operation_with_postop(ProcmonMinifilterCallback, &flt_operations)
+        },
+        ProcmonMinifilterContext,
+    )
+    .unload(MinifilterUnloadStruct)
+    .build_and_register(&CONTEXT_REGISTRY, driver)
+    .inspect_err(|e| maple::error!("Failed to create minifilter instance: {:?}", e))?;
 
     Ok(())
 }
@@ -108,11 +116,20 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
-struct MinifilterUnloadStruct {}
+struct MinifilterUnloadStruct;
 
-impl FilterOperationVisitor for MinifilterUnloadStruct {
-    fn unload(&self, _mandatory: bool) -> UnloadStatus {
+impl FilterUnload for MinifilterUnloadStruct {
+    type MinifilterContext = ProcmonMinifilterContext;
+
+    fn call(minifilter_context: &'static Self::MinifilterContext, mandatory: bool) -> UnloadStatus {
         info!(name = "Unload", "Unloading callback called");
+
+        DRIVER_CONTEXT.get().communication.stop();
+        MinifilterFramework::unregister();
+
+        if let Err(_) = DRIVER_CONTEXT.get().process_cache.try_stop() {
+            maple::error!("Failed to stop process cache :(");
+        }
 
         maple::consumer::get_global_registry().disable_consumer();
         CONTEXT_REGISTRY.drop_self();

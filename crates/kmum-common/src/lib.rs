@@ -1,12 +1,11 @@
 #![no_std]
 
-use krnmsg::{KmMessageCommonHeader, KmMessageEventKind};
+use event::{EventCompoent, EventStack, SimpleProcessDetails};
 use nt_string::widestring::U16CStr;
 use process::ProcessInformation;
 use serde::{Deserialize, Serialize};
-use serializable_ntstring::SerializableNtString;
 
-pub mod krnmsg;
+pub mod event;
 pub mod process;
 pub mod serializable_ntstring;
 
@@ -22,15 +21,13 @@ pub const MAX_UM_SEND_MESSAGE_BUFFER_SIZE: usize = 32 * 1024;
 //Km -> Um
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KmMessage {
-    pub common: KmMessageCommonHeader,
-    pub event: KmMessageEventKind,
+    pub event: EventCompoent,
+    pub process: SimpleProcessDetails,
+    pub stack: EventStack,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum UmReplyMessage {
-    Reply(bool),
-    Redirect(SerializableNtString),
-}
+pub enum UmReplyMessage {}
 
 //Um -> Km
 #[derive(Debug, Serialize, Deserialize)]

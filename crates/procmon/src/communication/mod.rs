@@ -41,6 +41,10 @@ impl Communication {
     pub fn try_send_event(&self, message: KmMessage) -> anyhow::Result<(), CommunicationError> {
         self.messaging.try_emplace_event(message)
     }
+
+    pub fn stop(&self) {
+        self.messaging.stop();
+    }
 }
 
 impl MessagingCallback for CommunicationCallback {

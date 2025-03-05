@@ -90,7 +90,7 @@ impl PsInfoContainer {
         let eprocess = ps_lookup_by_process_id(pid as _)?;
 
         //lazy map the process
-        let mut process_info = ProcessInformationFactory::try_create_from_eprocess(&eprocess, pid)?;
+        let process_info = ProcessInformationFactory::try_create_from_eprocess(&eprocess, pid)?;
 
         Some(self.create_mapping(process_info))
     }

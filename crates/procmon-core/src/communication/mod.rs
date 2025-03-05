@@ -43,7 +43,7 @@ struct CommunicationMessageHandler {}
 impl MessageProcessor for CommunicationMessageHandler {
     fn process(&self, iter: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError> {
         for msg in iter {
-            if msg.common.pid != unsafe { GetCurrentProcessId() as u64 } {
+            if msg.process.pid != unsafe { GetCurrentProcessId() as u64 } {
                 continue;
             }
 
