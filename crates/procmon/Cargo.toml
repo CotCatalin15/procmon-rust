@@ -11,6 +11,8 @@ crate-type = ["cdylib"]
 anyhow.workspace = true
 thiserror.workspace = true
 
+microseh = { version = "=1.1.2", default-features = false }
+
 windows-sys = { version = "0.52", features = [
     "Wdk_Foundation",
     "Wdk_Storage",
@@ -42,13 +44,18 @@ hashbrown = { version = "0.14.3", default-features = false, features = [
 bitflags = { version = "2.6.0" }
 nt-string.workspace = true
 
-wdrf = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
-wdrf-std = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
-maple = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
-
 serde.workspace = true
 postcard.workspace = true
 kmum-common = { path = "../kmum-common", version = "*" }
+
+#wdrf = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
+#wdrf-std = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
+#maple = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
+
+#[patch."https://github.com/CotCatalin15/windows-driver-rust-framework"]
+wdrf = { path = "D:/Programare/Rust/Github/windows-driver-rust-framework/crates/wdrf", version = "*" }
+wdrf-std = { path = "D:/Programare/Rust/Github/windows-driver-rust-framework/crates/wdrf-std", version = "*" }
+maple = { path = "D:/Programare/Rust/Github/windows-driver-rust-framework/crates/maple", version = "*" }
 
 
 [build-dependencies]

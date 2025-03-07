@@ -4,9 +4,7 @@
 use tracing::info;
 
 fn main() {
-    std::panic::set_hook(Box::new(|_info| unsafe {
-        core::intrinsics::breakpoint();
-    }));
+    std::panic::set_hook(Box::new(|_info| core::intrinsics::breakpoint()));
 
     let sub = tracing_subscriber::fmt()
         .with_ansi(false) // Disable ANSI color codes

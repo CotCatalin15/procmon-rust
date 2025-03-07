@@ -1,6 +1,4 @@
-use kmum_common::{
-    KmMessage, KmReplyMessage, UmReplyMessage, UmSendMessage, MAX_UM_SEND_MESSAGE_BUFFER_SIZE,
-};
+use kmum_common::{KmMessage, KmReplyMessage, UmSendMessage, MAX_UM_SEND_MESSAGE_BUFFER_SIZE};
 
 use super::{
     dispatcher::{Dispatcher, FilterBufferHandler},
@@ -8,10 +6,7 @@ use super::{
 };
 
 pub trait MessageProcessor: Send + Sync + 'static {
-    fn process(
-        &self,
-        message: &KmMessage,
-    ) -> anyhow::Result<Option<UmReplyMessage>, CommunicationError>;
+    fn process(&self, message: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>;
 }
 
 pub struct CommunicationProcessor {
@@ -81,29 +76,35 @@ struct CommunicationProcessorCallback<P: MessageProcessor> {
     processor: P,
 }
 
+pub struct KmMessageIterator<'a> {
+    buffer: &'a [u8],
+}
+
+impl<'a> Iterator for KmMessageIterator<'a> {
+    type Item = KmMessage;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Ok((message, remaining)) = postcard::take_from_bytes::<KmMessage>(&self.buffer) {
+            self.buffer = remaining;
+            Some(message)
+        } else {
+            None
+        }
+    }
+}
+
 impl<P: MessageProcessor> FilterBufferHandler for CommunicationProcessorCallback<P> {
     fn handle_buffer(
         &self,
         receive_buffer: &[u8],
-        reply_buffer: &mut [u8],
+        _reply_buffer: &mut [u8],
     ) -> anyhow::Result<(), CommunicationError> {
-        let message =
-            postcard::from_bytes(receive_buffer).map_err(|_| CommunicationError::Parsing)?;
+        let mut km_iter = KmMessageIterator {
+            buffer: receive_buffer,
+        };
 
-        let reply = self.processor.process(&message)?;
+        let _ = self.processor.process(&mut km_iter);
 
-        if reply_buffer.is_empty() {
-            //Not expecting a reply so just ignoring this
-            Ok(())
-        } else {
-            //Expecting a reply so serialize it
-            if let Some(reply) = reply {
-                postcard::to_slice(&reply, reply_buffer)
-                    .map(|_| ())
-                    .map_err(|_| CommunicationError::Parsing)
-            } else {
-                Err(CommunicationError::Parsing)
-            }
-        }
+        Ok(())
     }
 }

@@ -1,9 +1,12 @@
 #![no_std]
 
+use event::{EventCompoent, EventStack, SimpleProcessDetails};
 use nt_string::widestring::U16CStr;
+use process::ProcessInformation;
 use serde::{Deserialize, Serialize};
-use serializable_ntstring::SerializableNtString;
 
+pub mod event;
+pub mod process;
 pub mod serializable_ntstring;
 
 pub fn get_communication_port_name() -> &'static U16CStr {
@@ -17,25 +20,22 @@ pub const MAX_UM_SEND_MESSAGE_BUFFER_SIZE: usize = 32 * 1024;
 
 //Km -> Um
 #[derive(Debug, Serialize, Deserialize)]
-pub enum KmMessage {
-    CreateFile(SerializableNtString),
-    WriteFile(SerializableNtString),
+pub struct KmMessage {
+    pub event: EventCompoent,
+    pub process: SimpleProcessDetails,
+    pub stack: EventStack,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum UmReplyMessage {
-    Reply(bool),
-    Redirect(SerializableNtString),
-}
+pub enum UmReplyMessage {}
 
 //Um -> Km
 #[derive(Debug, Serialize, Deserialize)]
 pub enum UmSendMessage {
-    Reply(bool),
-    Redirect(SerializableNtString),
+    GetPidInfo(u64),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KmReplyMessage {
-    Reply(bool),
+    AboutPid(ProcessInformation),
 }

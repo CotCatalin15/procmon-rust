@@ -1,8 +1,8 @@
-use dispatcher::{Dispatcher, FilterBufferHandler};
-use kmum_common::{KmMessage, UmReplyMessage, UmSendMessage};
-use nt_string::unicode_string::NtUnicodeString;
-use processor::{CommunicationProcessor, MessageProcessor};
+use kmum_common::{KmReplyMessage, UmSendMessage};
+use processor::CommunicationProcessor;
+use processor::{KmMessageIterator, MessageProcessor};
 use tracing::info;
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
 mod dispatcher;
 mod message_handler;
@@ -27,35 +27,29 @@ impl Communication {
     pub fn new() -> Self {
         let processor = CommunicationProcessor::new(1, CommunicationMessageHandler {});
 
-        let reply = processor
-            .send_message(&UmSendMessage::Redirect(
-                NtUnicodeString::try_from("RATATATAT").unwrap().into(),
-            ))
-            .unwrap();
-
-        info!("Received reply from km: {:#?}", reply);
-
         Self { processor }
+    }
+
+    pub fn send_message(
+        &self,
+        message: UmSendMessage,
+    ) -> Result<Option<KmReplyMessage>, CommunicationError> {
+        self.processor.send_message(&message)
     }
 }
 
 struct CommunicationMessageHandler {}
 
 impl MessageProcessor for CommunicationMessageHandler {
-    fn process(
-        &self,
-        message: &KmMessage,
-    ) -> anyhow::Result<Option<UmReplyMessage>, CommunicationError> {
-        info!("Received message from kernel: {:#?}", message);
-
-        match message {
-            KmMessage::CreateFile(file) => {
-                let mut redirect_path = file.clone();
-                redirect_path.try_push_str("_Redirected.exe").unwrap();
-
-                Ok(Some(UmReplyMessage::Redirect(redirect_path.into())))
+    fn process(&self, iter: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError> {
+        for msg in iter {
+            if msg.process.pid != unsafe { GetCurrentProcessId() as u64 } {
+                continue;
             }
-            KmMessage::WriteFile(_buffer) => Ok(Some(UmReplyMessage::Reply(true))),
+
+            info!("Received message from kernel: {:#?}", msg);
         }
+
+        Ok(())
     }
 }

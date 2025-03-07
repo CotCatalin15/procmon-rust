@@ -1,43 +1,36 @@
 #![no_std]
+#![feature(let_chains)]
+#![allow(unused_attributes)]
 
 use communication::Communication;
 use global::{DriverContext, CONTEXT_REGISTRY, DBGPRINT_LOGGER, DRIVER_CONTEXT};
-use nt_string::{unicode_string::NtUnicodeStr, widestring::U16Str};
+use imports::DynFncImports;
+use minifilter::{ProcmonMinifilterCallback, ProcmonMinifilterContext};
+use pscollector::ProcessCollectorCache;
 use wdrf::{
     context::ContextRegistry,
     logger::DbgPrintLogger,
-    minifilter::{
-        filter::{framework::MinifilterFramework, MinifilterFrameworkBuilder},
-        structs::IRP_MJ_OPERATION_END,
+    minifilter::filter::{
+        builder::{MinifilterFrameworkBuilder, MinifilterOperationBuilder},
+        framework::MinifilterFramework,
+        registration::{FltOperationEntry, FltOperationType},
+        FilterUnload, UnloadStatus,
     },
 };
-use wdrf_std::dbg_break;
+use wdrf_std::{dbg_break, kmalloc::TaggedObject};
 use windows_sys::{
-    Wdk::{
-        Foundation::DRIVER_OBJECT,
-        Storage::FileSystem::{
-            Minifilters::{
-                FltGetRequestorProcessId, FLT_CALLBACK_DATA, FLT_OPERATION_REGISTRATION,
-                FLT_PREOP_CALLBACK_STATUS, FLT_PREOP_COMPLETE, FLT_PREOP_SUCCESS_NO_CALLBACK,
-                FLT_RELATED_OBJECTS,
-            },
-            SyncTypeCreateSection,
-        },
-        System::SystemServices::PAGE_EXECUTE,
-    },
-    Win32::{
-        Foundation::{
-            NTSTATUS, STATUS_ACCESS_DENIED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
-        },
-        System::Diagnostics::Debug::CONTEXT,
-    },
+    Wdk::Foundation::DRIVER_OBJECT,
+    Win32::Foundation::{NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING},
 };
 
 use maple::info;
 
 pub mod communication;
 pub mod global;
+pub mod imports;
+pub mod minifilter;
 pub mod panic;
+pub mod pscollector;
 
 fn driver_main(driver: &mut DRIVER_OBJECT, _registry_path: &UNICODE_STRING) -> anyhow::Result<()> {
     dbg_break();
@@ -45,18 +38,22 @@ fn driver_main(driver: &mut DRIVER_OBJECT, _registry_path: &UNICODE_STRING) -> a
 
     info!(name = "DriverMain", "Init driver something idk :(");
 
-    let filter = setup_filter(driver)?;
-    let communication = create_communication(filter.clone())?;
+    DynFncImports::try_load(&CONTEXT_REGISTRY)?;
 
+    setup_filter(driver)?;
+    let communication = create_communication()?;
+
+    let cache = ProcessCollectorCache::try_create().unwrap();
     DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, || DriverContext {
-        filter: filter.clone(),
         communication,
-        test: None,
+        process_cache: cache,
     })?;
+
+    DRIVER_CONTEXT.get().process_cache.try_start().unwrap();
 
     unsafe {
         info!("Starting the minifilter");
-        filter.start_filtering()?;
+        MinifilterFramework::start_filtering().unwrap();
     }
 
     Ok(())
@@ -72,60 +69,39 @@ fn init_logging() -> anyhow::Result<()> {
     Ok(())
 }
 
-const IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION: u8 = 255;
-
-unsafe extern "system" fn process_map_precreate(
-    data: *mut FLT_CALLBACK_DATA,
-    fltobjects: *const FLT_RELATED_OBJECTS,
-    _completioncontext: *mut *mut ::core::ffi::c_void,
-) -> FLT_PREOP_CALLBACK_STATUS {
-    let param_block = &*(*data).Iopb;
-    let section = &param_block.Parameters.AcquireForSectionSynchronization;
-
-    if section.SyncType == SyncTypeCreateSection
-        && (section.PageProtection & PAGE_EXECUTE) == PAGE_EXECUTE
-    {
-        let file_object = &*(*fltobjects).FileObject;
-        let name = &file_object.FileName;
-        let name = NtUnicodeStr::from_raw_parts(name.Buffer, name.Length, name.MaximumLength);
-
-        let requestor_id = FltGetRequestorProcessId(data);
-
-        let edge: &'static U16Str = nt_string::widestring::u16str!("edge");
-
-        let is_edge = name
-            .as_slice()
-            .windows(edge.len())
-            .any(|w| w == edge.as_slice());
-
-        if is_edge {
-            info!("## DENY AcquireForSectionSync, process: {name}, panrent {requestor_id}");
-            let block = &mut (*data).IoStatus;
-            block.Anonymous.Status = STATUS_ACCESS_DENIED;
-
-            return FLT_PREOP_COMPLETE;
-        } else {
-            info!("AcquireForSectionSync, process: {name}, panrent {requestor_id}");
-        }
-    }
-
-    return FLT_PREOP_SUCCESS_NO_CALLBACK;
-}
-
 fn setup_filter(driver: &mut DRIVER_OBJECT) -> anyhow::Result<()> {
     info!("Initializing the minifilter");
 
-    MinifilterFrameworkBuilder::new(pre)
-        .build_and_register(&CONTEXT_REGISTRY, driver)
-        .unwrap();
+    let flt_operations = [
+        FltOperationEntry::new(FltOperationType::Create, 0),
+        FltOperationEntry::new(FltOperationType::Write, 0),
+        FltOperationEntry::new(FltOperationType::Read, 0),
+        FltOperationEntry::new(FltOperationType::Close, 0),
+    ];
+
+    MinifilterFrameworkBuilder::new_with_context(
+        || {
+            MinifilterOperationBuilder::new()
+                .operation_with_postop(ProcmonMinifilterCallback, &flt_operations)?
+                .build()
+        },
+        ProcmonMinifilterContext,
+    )
+    .map_err(|e| {
+        maple::error!("Minifilter framework error: {e}");
+        anyhow::Error::msg("Failed to create minifilter framework")
+    })?
+    .unload(MinifilterUnloadStruct)
+    .build_and_register(&CONTEXT_REGISTRY, driver)
+    .inspect_err(|e| maple::error!("Failed to create minifilter instance: {:?}", e))?;
 
     Ok(())
 }
 
-fn create_communication(filter: FltFilter) -> anyhow::Result<Communication> {
+fn create_communication() -> anyhow::Result<Communication> {
     info!("Creating communication ");
 
-    Communication::try_create(filter).map_err(|e| {
+    Communication::try_create().map_err(|e| {
         maple::error!("Failed to create communication: {:#?}", e);
         anyhow::Error::msg("Failed to create communication")
     })
@@ -150,10 +126,25 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
-pub unsafe extern "system" fn minifilter_unload(_flags: u32) -> NTSTATUS {
-    info!(name = "Unload", "Unloading callback called");
+struct MinifilterUnloadStruct;
 
-    maple::consumer::get_global_registry().disable_consumer();
-    CONTEXT_REGISTRY.drop_self();
-    STATUS_SUCCESS
+impl FilterUnload for MinifilterUnloadStruct {
+    type MinifilterContext = ProcmonMinifilterContext;
+
+    fn call(minifilter_context: &'static Self::MinifilterContext, mandatory: bool) -> UnloadStatus {
+        info!(name = "Unload", "Unloading callback called");
+
+        DRIVER_CONTEXT.get().communication.stop();
+        MinifilterFramework::unregister();
+
+        if let Err(_) = DRIVER_CONTEXT.get().process_cache.try_stop() {
+            maple::error!("Failed to stop process cache :(");
+        }
+
+        maple::consumer::get_global_registry().disable_consumer();
+        CONTEXT_REGISTRY.drop_self();
+
+        UnloadStatus::Unload
+    }
 }
+impl TaggedObject for MinifilterUnloadStruct {}

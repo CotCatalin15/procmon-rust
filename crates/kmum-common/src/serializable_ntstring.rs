@@ -8,6 +8,16 @@ use serde::{de::Visitor, Deserialize, Serialize};
 
 pub struct SerializableNtString(NtUnicodeString);
 
+impl SerializableNtString {
+    pub fn new(nt_str: NtUnicodeString) -> Self {
+        Self(nt_str)
+    }
+
+    pub fn empty() -> Self {
+        Self(NtUnicodeString::new())
+    }
+}
+
 impl Debug for SerializableNtString {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         Display::fmt(&self.0, f)
@@ -51,7 +61,12 @@ impl Serialize for SerializableNtString {
     where
         S: serde::Serializer,
     {
-        serializer.collect_seq(self.0.as_slice().iter())
+        if self.0.len() == 0 {
+            let empty_buffer: &[u16] = &[];
+            serializer.collect_seq(empty_buffer.iter())
+        } else {
+            serializer.collect_seq(self.0.as_slice().iter())
+        }
     }
 }
 
