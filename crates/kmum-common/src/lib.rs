@@ -26,6 +26,9 @@ pub struct KmMessage {
     pub stack: EventStack,
 }
 
+unsafe impl Sync for KmMessage {}
+unsafe impl Send for KmMessage {}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum UmReplyMessage {}
 

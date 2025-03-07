@@ -1,6 +1,10 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use kmum_common::process::{ProcessInformation, UniqueProcessId};
+use kmum_common::{
+    process::{ProcessInformation, UniqueProcessId},
+    serializable_ntstring::SerializableNtString,
+};
+use nt_string::{unicode_string::NtUnicodeString, widestring::u16cstr};
 use wdrf::process::ps_lookup_by_process_id;
 use wdrf_std::{
     hashbrown::{HashMap, HashMapExt},
@@ -40,7 +44,7 @@ pub struct PsInfoContainer {
 impl PsInfoContainer {
     pub fn create() -> Self {
         let container = Self {
-            last_unique_id: AtomicU64::new(1),
+            last_unique_id: AtomicU64::new(4),
             pid_to_unique_id: ExSpinMutex::new(HashMap::create_in(
                 GlobalKernelAllocator::new_for_tagged::<ProcessMapping>(),
             )),
@@ -49,36 +53,29 @@ impl PsInfoContainer {
             )),
         };
 
-        /*
-                let system_path = NtUnicodeString::try_from(u16cstr!("system")).unwrap();
-                let idle_path = NtUnicodeString::try_from(u16cstr!("idle")).unwrap();
+        let system_path = NtUnicodeString::try_from(u16cstr!("system")).unwrap();
 
-                container.create_full_mapping(ProcessInformation {
-                    path: SerializableNtString::new(system_path),
-                    cmd: None,
-                    pid: 4,
-                    parent_pid: 0,
-                    start_time: 0,
-                    end_time: None,
-                    unique_id: 0, //gets filled by create_mapping
-                });
-
-                container.create_full_mapping(ProcessInformation {
-                    path: SerializableNtString::new(idle_path),
-                    cmd: None,
-                    pid: 0,
-                    parent_pid: 0,
-                    start_time: 0,
-                    end_time: None,
-                    unique_id: 0, //gets filled by create_mapping
-                });
-        */
+        container.pid_to_unique_id.write().insert(4, 1); //system
+        container.process_information_map.write().insert(
+            1, //uid
+            ProcessMapping::Full(ProcessInformation {
+                path: SerializableNtString::new(system_path),
+                cmd: None,
+                pid: 4,
+                parent_pid: 0,
+                start_time: 0,
+                end_time: None,
+                unique_id: 1,
+            }),
+        );
 
         container
     }
 
     pub fn get_uid(&self, pid: u64) -> Option<UniqueProcessId> {
-        let eprocess = ps_lookup_by_process_id(pid as _)?;
+        if pid < 4 {
+            return None;
+        }
 
         let uid = self.pid_to_unique_id.read().get(&pid).cloned();
         if uid.is_some() {
@@ -86,6 +83,7 @@ impl PsInfoContainer {
         }
 
         let next_uid = self.last_unique_id.fetch_add(1, Ordering::SeqCst);
+        let eprocess = ps_lookup_by_process_id(pid as _)?;
         let mut uid_guard = self.pid_to_unique_id.write();
 
         match uid_guard.try_insert(pid, next_uid) {

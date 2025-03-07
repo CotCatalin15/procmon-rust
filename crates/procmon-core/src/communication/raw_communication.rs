@@ -20,6 +20,9 @@ pub struct RawCommunication {
     port: PortHandle,
 }
 
+unsafe impl Send for RawCommunication {}
+unsafe impl Sync for RawCommunication {}
+
 impl PortHandle {
     pub fn new(name: &[u16]) -> anyhow::Result<Self> {
         let mut handle = 0;

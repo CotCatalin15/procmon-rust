@@ -9,38 +9,18 @@ pub trait MessageProcessor: Send + Sync + 'static {
     fn process(&self, message: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>;
 }
 
-pub struct CommunicationProcessor {
-    dispatcher: Box<dyn DispatcherHolder>,
+pub struct Communication {
+    dispatcher: Dispatcher,
 }
 
-impl CommunicationProcessor {
-    pub fn new<P: MessageProcessor>(num_threads: u32, processor: P) -> Self {
+impl Communication {
+    pub fn new() -> Self {
         Self {
-            dispatcher: Box::new(ProcessorDispatcherHolder::new(num_threads, processor)),
+            dispatcher: Dispatcher::new(),
         }
     }
 
-    pub fn send_message(
-        &self,
-        message: &UmSendMessage,
-    ) -> anyhow::Result<Option<KmReplyMessage>, CommunicationError> {
-        self.dispatcher.send_message(message)
-    }
-}
-
-trait DispatcherHolder {
-    fn send_message(
-        &self,
-        message: &UmSendMessage,
-    ) -> anyhow::Result<Option<KmReplyMessage>, CommunicationError>;
-}
-
-struct ProcessorDispatcherHolder<P: MessageProcessor> {
-    dispatcher: Dispatcher<CommunicationProcessorCallback<P>>,
-}
-
-impl<P: MessageProcessor> DispatcherHolder for ProcessorDispatcherHolder<P> {
-    fn send_message(
+    pub fn send_message_blocking(
         &self,
         message: &UmSendMessage,
     ) -> anyhow::Result<Option<KmReplyMessage>, CommunicationError> {
@@ -62,17 +42,19 @@ impl<P: MessageProcessor> DispatcherHolder for ProcessorDispatcherHolder<P> {
             Ok(None)
         }
     }
-}
 
-impl<P: MessageProcessor> ProcessorDispatcherHolder<P> {
-    fn new(num_threads: u32, processor: P) -> Self {
-        Self {
-            dispatcher: Dispatcher::new(num_threads, CommunicationProcessorCallback { processor }),
-        }
+    pub fn process_blocking<P>(&self, processor: P)
+    where
+        P: Fn(&mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>,
+    {
+        self.dispatcher
+            .process_blocking(CommunicationProcessorCallback { processor });
     }
 }
 
-struct CommunicationProcessorCallback<P: MessageProcessor> {
+struct CommunicationProcessorCallback<
+    P: Fn(&mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>,
+> {
     processor: P,
 }
 
@@ -93,7 +75,9 @@ impl<'a> Iterator for KmMessageIterator<'a> {
     }
 }
 
-impl<P: MessageProcessor> FilterBufferHandler for CommunicationProcessorCallback<P> {
+impl<P: Fn(&mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>> FilterBufferHandler
+    for CommunicationProcessorCallback<P>
+{
     fn handle_buffer(
         &self,
         receive_buffer: &[u8],
@@ -103,7 +87,7 @@ impl<P: MessageProcessor> FilterBufferHandler for CommunicationProcessorCallback
             buffer: receive_buffer,
         };
 
-        let _ = self.processor.process(&mut km_iter);
+        let _ = (self.processor)(&mut km_iter);
 
         Ok(())
     }

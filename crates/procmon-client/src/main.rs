@@ -3,7 +3,8 @@
 
 use tracing::info;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     std::panic::set_hook(Box::new(|_info| core::intrinsics::breakpoint()));
 
     let sub = tracing_subscriber::fmt()
@@ -13,5 +14,5 @@ fn main() {
 
     info!("Starting client");
 
-    procmon_core::test();
+    procmon_core::runtime::ProcmonRuntime::new().run().await;
 }
