@@ -9,7 +9,7 @@ use std::{
 
 use communication::Communication;
 use kmum_common::UmSendMessage;
-use windows_sys::Win32::System::Threading::{GetCurrentProcessId, Sleep};
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
 use tracing::info;
 
@@ -22,10 +22,10 @@ pub fn test() {
 
     let _pid = unsafe { GetCurrentProcessId() as u64 };
 
-    let th = spawn(|| loop {
+    let _th = spawn(|| loop {
         println!("Creating file\n");
-        std::fs::remove_file("test.txt");
-        let file = std::fs::File::create("test.txt");
+        let _ = std::fs::remove_file("test.txt");
+        let _file = std::fs::File::create("test.txt");
 
         thread::sleep(Duration::from_secs(5));
     });

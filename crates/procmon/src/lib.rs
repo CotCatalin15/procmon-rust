@@ -17,7 +17,7 @@ use wdrf::{
         FilterUnload, UnloadStatus,
     },
 };
-use wdrf_std::{dbg_break, kmalloc::TaggedObject, sync::event::Event, sys::event::EventType};
+use wdrf_std::{dbg_break, kmalloc::TaggedObject};
 use windows_sys::{
     Wdk::Foundation::DRIVER_OBJECT,
     Win32::Foundation::{NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING},
@@ -72,15 +72,25 @@ fn init_logging() -> anyhow::Result<()> {
 fn setup_filter(driver: &mut DRIVER_OBJECT) -> anyhow::Result<()> {
     info!("Initializing the minifilter");
 
-    let flt_operations = [FltOperationEntry::new(FltOperationType::Create, 0)];
+    let flt_operations = [
+        FltOperationEntry::new(FltOperationType::Create, 0),
+        FltOperationEntry::new(FltOperationType::Write, 0),
+        FltOperationEntry::new(FltOperationType::Read, 0),
+        FltOperationEntry::new(FltOperationType::Close, 0),
+    ];
 
     MinifilterFrameworkBuilder::new_with_context(
         || {
             MinifilterOperationBuilder::new()
-                .operation_with_postop(ProcmonMinifilterCallback, &flt_operations)
+                .operation_with_postop(ProcmonMinifilterCallback, &flt_operations)?
+                .build()
         },
         ProcmonMinifilterContext,
     )
+    .map_err(|e| {
+        maple::error!("Minifilter framework error: {e}");
+        anyhow::Error::msg("Failed to create minifilter framework")
+    })?
     .unload(MinifilterUnloadStruct)
     .build_and_register(&CONTEXT_REGISTRY, driver)
     .inspect_err(|e| maple::error!("Failed to create minifilter instance: {:?}", e))?;

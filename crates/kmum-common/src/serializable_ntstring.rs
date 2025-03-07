@@ -61,7 +61,7 @@ impl Serialize for SerializableNtString {
     where
         S: serde::Serializer,
     {
-        if (self.0.len() == 0) {
+        if self.0.len() == 0 {
             let empty_buffer: &[u16] = &[];
             serializer.collect_seq(empty_buffer.iter())
         } else {

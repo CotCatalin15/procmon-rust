@@ -90,6 +90,7 @@ impl RawCommunication {
         }
     }
 
+    #[allow(dead_code)]
     ///
     /// # Safety
     ///

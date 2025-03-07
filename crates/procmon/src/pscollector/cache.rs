@@ -52,11 +52,11 @@ impl ProcessCollectorCache {
         &self,
         unique_id: UniqueProcessId,
     ) -> Option<ProcessInformation> {
-        self.container.get_process_info_from_uid(unique_id)
+        self.container.get_info(unique_id)
     }
 
     pub fn pid_to_unique_id(&self, pid: u64) -> Option<UniqueProcessId> {
-        self.container.pid_to_unique_id(pid)
+        self.container.get_uid(pid)
     }
 
     fn internal_on_process_create(
@@ -65,12 +65,11 @@ impl ProcessCollectorCache {
         pid: u64,
         process_info: &PsCreateNotifyInfo,
     ) -> Option<UniqueProcessId> {
-        self.container
-            .register_from_process_create(eprocess, pid as _, process_info)
+        self.container.get_info(pid).map(|info| info.unique_id)
     }
 
     fn internal_on_process_exit(&self, pid: u64) -> Option<UniqueProcessId> {
-        self.container.register_from_process_destroy(pid)
+        self.container.unmap_pid(pid)
     }
 }
 

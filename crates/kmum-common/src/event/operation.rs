@@ -15,7 +15,10 @@ pub enum EventProcessOperation {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EventFileSystemOperation {
-    Create { attribute: u64 },
+    Create { attribute: u16 },
+    Read { length: u64, offset: i64 },
+    Write { length: u64, offset: i64 },
+    Close {},
 }
 
 #[derive(Debug, Serialize, Deserialize)]

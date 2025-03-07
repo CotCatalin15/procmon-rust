@@ -1,11 +1,7 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use kmum_common::{
-    process::{ProcessInformation, UniqueProcessId},
-    serializable_ntstring::SerializableNtString,
-};
-use nt_string::{unicode_string::NtUnicodeString, widestring::u16cstr};
-use wdrf::process::{ps_lookup_by_process_id, PsCreateNotifyInfo};
+use kmum_common::process::{ProcessInformation, UniqueProcessId};
+use wdrf::process::ps_lookup_by_process_id;
 use wdrf_std::{
     hashbrown::{HashMap, HashMapExt},
     kmalloc::{GlobalKernelAllocator, TaggedObject},
@@ -15,20 +11,30 @@ use wdrf_std::{
     time::SystemTime,
     traits::DispatchSafe,
 };
-use windows_sys::Win32::Foundation::HANDLE;
 
 use super::proc_info_factory::ProcessInformationFactory;
 
-pub struct DispatchSafeProcessInformation(ProcessInformation);
+#[derive(Clone)]
+enum ProcessMapping {
+    Partial {
+        uid: UniqueProcessId,
+        pid: u64,
+        eprocess: ArcKernelObj<PKPROCESS>,
+    },
+    Full(ProcessInformation),
+    Failed,
+}
 
-unsafe impl DispatchSafe for DispatchSafeProcessInformation {}
-impl TaggedObject for DispatchSafeProcessInformation {}
+unsafe impl DispatchSafe for ProcessMapping {}
+impl TaggedObject for ProcessMapping {}
+
+struct ProcessInformationInternal {}
 
 pub struct PsInfoContainer {
     last_unique_id: AtomicU64,
 
     pid_to_unique_id: ExSpinMutex<HashMap<u64, UniqueProcessId>>,
-    process_information_map: ExSpinMutex<HashMap<UniqueProcessId, DispatchSafeProcessInformation>>,
+    process_information_map: ExSpinMutex<HashMap<UniqueProcessId, ProcessMapping>>,
 }
 
 impl PsInfoContainer {
@@ -36,113 +42,131 @@ impl PsInfoContainer {
         let container = Self {
             last_unique_id: AtomicU64::new(1),
             pid_to_unique_id: ExSpinMutex::new(HashMap::create_in(
-                GlobalKernelAllocator::new_for_tagged::<DispatchSafeProcessInformation>(),
+                GlobalKernelAllocator::new_for_tagged::<ProcessMapping>(),
             )),
             process_information_map: ExSpinMutex::new(HashMap::create_in(
-                GlobalKernelAllocator::new_for_tagged::<DispatchSafeProcessInformation>(),
+                GlobalKernelAllocator::new_for_tagged::<ProcessMapping>(),
             )),
         };
 
-        let system_path = NtUnicodeString::try_from(u16cstr!("system")).unwrap();
-        let idle_path = NtUnicodeString::try_from(u16cstr!("idle")).unwrap();
+        /*
+                let system_path = NtUnicodeString::try_from(u16cstr!("system")).unwrap();
+                let idle_path = NtUnicodeString::try_from(u16cstr!("idle")).unwrap();
 
-        container.create_mapping(ProcessInformation {
-            path: SerializableNtString::new(system_path),
-            cmd: None,
-            pid: 4,
-            parent_pid: 0,
-            start_time: 0,
-            end_time: None,
-            unique_id: 0, //gets filled by create_mapping
-        });
+                container.create_full_mapping(ProcessInformation {
+                    path: SerializableNtString::new(system_path),
+                    cmd: None,
+                    pid: 4,
+                    parent_pid: 0,
+                    start_time: 0,
+                    end_time: None,
+                    unique_id: 0, //gets filled by create_mapping
+                });
 
-        container.create_mapping(ProcessInformation {
-            path: SerializableNtString::new(idle_path),
-            cmd: None,
-            pid: 0,
-            parent_pid: 0,
-            start_time: 0,
-            end_time: None,
-            unique_id: 0, //gets filled by create_mapping
-        });
+                container.create_full_mapping(ProcessInformation {
+                    path: SerializableNtString::new(idle_path),
+                    cmd: None,
+                    pid: 0,
+                    parent_pid: 0,
+                    start_time: 0,
+                    end_time: None,
+                    unique_id: 0, //gets filled by create_mapping
+                });
+        */
 
         container
     }
 
-    pub fn get_process_info_from_uid(
-        &self,
-        unique_id: UniqueProcessId,
-    ) -> Option<ProcessInformation> {
-        let guard = self.process_information_map.read();
-
-        guard.get(&unique_id).map(|info| (&info.0).clone())
-    }
-
-    pub fn pid_to_unique_id(&self, pid: u64) -> Option<UniqueProcessId> {
-        {
-            let guard = self.pid_to_unique_id.read();
-
-            if let Some(uid) = guard.get(&pid) {
-                return Some(*uid);
-            }
-        }
-
+    pub fn get_uid(&self, pid: u64) -> Option<UniqueProcessId> {
         let eprocess = ps_lookup_by_process_id(pid as _)?;
 
-        //lazy map the process
-        let process_info = ProcessInformationFactory::try_create_from_eprocess(&eprocess, pid)?;
+        let uid = self.pid_to_unique_id.read().get(&pid).cloned();
+        if uid.is_some() {
+            return uid;
+        }
 
-        Some(self.create_mapping(process_info))
-    }
+        let next_uid = self.last_unique_id.fetch_add(1, Ordering::SeqCst);
+        let mut uid_guard = self.pid_to_unique_id.write();
 
-    pub fn register_from_process_create(
-        &self,
-        eprocess: &ArcKernelObj<PKPROCESS>,
-        pid: HANDLE,
-        process_info: &PsCreateNotifyInfo,
-    ) -> Option<UniqueProcessId> {
-        let process_info =
-            ProcessInformationFactory::try_create_from_process_create(eprocess, pid, process_info)?;
+        match uid_guard.try_insert(pid, next_uid) {
+            Ok(_) => {
+                let mut proc_guard = self.process_information_map.write();
+                proc_guard.insert(
+                    next_uid,
+                    ProcessMapping::Partial {
+                        uid: next_uid,
+                        pid,
+                        eprocess,
+                    },
+                );
 
-        Some(self.create_mapping(process_info))
-    }
-
-    pub fn register_from_process_destroy(&self, pid: u64) -> Option<UniqueProcessId> {
-        let exit_time = SystemTime::new().raw_time();
-
-        let unique_guard = self.pid_to_unique_id.read();
-
-        if let Some(uid) = unique_guard.get(&pid) {
-            let mut process_guard = self.process_information_map.write();
-
-            process_guard.get_mut(uid).map(|process_info| {
-                process_info.0.end_time = Some(exit_time);
-                process_info.0.unique_id
-            })
-        } else {
-            None
+                Some(next_uid)
+            }
+            Err(occ) => Some(*occ.entry.key()),
         }
     }
 
-    fn create_mapping(&self, mut process_information: ProcessInformation) -> UniqueProcessId {
-        let pid = process_information.pid;
-        let next_uid = self.last_unique_id.fetch_add(1, Ordering::SeqCst);
+    pub fn get_info(&self, uid: UniqueProcessId) -> Option<ProcessInformation> {
+        let proc_guard = self.process_information_map.read();
+        let mapping = proc_guard.get(&uid)?;
+        if !mapping.needs_upgrade() {
+            return mapping.process_info().cloned();
+        };
+        let mut mapping = mapping.clone();
+        drop(proc_guard);
 
-        let mut unique_guard = self.pid_to_unique_id.write();
-        let mut process_guard = self.process_information_map.write();
+        mapping.upgrade()?;
 
-        if let Some(uid) = unique_guard.get(&pid) {
-            *uid
-        } else {
-            process_information.unique_id = next_uid;
+        let mut proc_guard = self.process_information_map.write();
+        let info = mapping.process_info().cloned();
+        proc_guard.insert(uid, mapping);
 
-            unique_guard.insert(pid, next_uid);
-            process_guard.insert(
-                next_uid,
-                DispatchSafeProcessInformation(process_information),
-            );
+        info
+    }
 
-            next_uid
+    pub fn unmap_pid(&self, pid: u64) -> Option<UniqueProcessId> {
+        self.pid_to_unique_id.write().remove(&pid).clone()
+    }
+}
+
+impl ProcessMapping {
+    fn needs_upgrade(&self) -> bool {
+        match self {
+            ProcessMapping::Partial { uid, pid, eprocess } => true,
+            _ => false,
+        }
+    }
+
+    fn upgrade(&mut self) -> Option<u64> {
+        match self {
+            ProcessMapping::Partial { uid, pid, eprocess } => {
+                if let Some(mut process_info) =
+                    ProcessInformationFactory::try_create_from_eprocess(&*eprocess, *pid)
+                {
+                    process_info.unique_id = *uid;
+                    Some(*uid)
+                } else {
+                    None
+                }
+            }
+            ProcessMapping::Full(process_info) => Some(process_info.unique_id),
+            _ => None,
+        }
+    }
+
+    fn process_info(&self) -> Option<&ProcessInformation> {
+        match self {
+            ProcessMapping::Full(process_information) => Some(process_information),
+            _ => None,
+        }
+    }
+
+    fn mark_terminate_time(&mut self) {
+        match self {
+            ProcessMapping::Full(process_information) => {
+                process_information.end_time = Some(SystemTime::new().raw_time());
+            }
+            _ => {}
         }
     }
 }
