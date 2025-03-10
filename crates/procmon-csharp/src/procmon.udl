@@ -1,0 +1,10 @@
+namespace procmon {
+    
+};
+
+interface ProcmonCore {
+    constructor(string memory_database_name);
+
+    void start();
+    void stop();
+};

@@ -1,0 +1,34 @@
+﻿<Window x:Class="ProcmonUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ProcmonUI"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <Grid>
+        <ListView ItemsSource="{Binding Events}"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="ID" DisplayMemberBinding="{Binding Id}" Width="100" />
+                    <GridViewColumn Header="Timestamp" DisplayMemberBinding="{Binding Timestamp}" Width="150" />
+                    <GridViewColumn Header="PID" DisplayMemberBinding="{Binding Pid}" Width="80" />
+                    <GridViewColumn Header="UID" DisplayMemberBinding="{Binding Uid}" Width="80" />
+                    <GridViewColumn Header="TID" DisplayMemberBinding="{Binding Tid}" Width="100" />
+                    <GridViewColumn Header="Operation" DisplayMemberBinding="{Binding Operation}" Width="150" />
+                    <GridViewColumn Header="Additional Data" DisplayMemberBinding="{Binding AdditionalData}" Width="200" />
+                </GridView>
+            </ListView.View>
+            <ListView.Template>
+                <ControlTemplate TargetType="ListView">
+                    <ScrollViewer x:Name="ScrollViewer"
+                                  ScrollChanged="ScrollViewer_ScrollChanged">
+                        <ItemsPresenter />
+                    </ScrollViewer>
+                </ControlTemplate>
+            </ListView.Template>
+        </ListView>
+    </Grid>
+</Window>

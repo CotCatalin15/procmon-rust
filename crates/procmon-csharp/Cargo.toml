@@ -1,0 +1,46 @@
+[package]
+name = "procmon-csharp"
+version = "0.1.0"
+edition.workspace = true
+repository.workspace = true
+
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "procmon_csharp"
+
+[dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_SystemInformation",
+] }
+
+rusqlite = { version = "0.34.0", features = ["bundled"] }
+chrono = "0.4"
+
+
+procmon-core.workspace = true
+nt-string.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio = { version = "1.43.0", features = ["full"] }
+rand = "0.8"
+
+kmum-common = { path = "../kmum-common", version = "*" }
+
+uniffi = "0.25"
+
+[bindings.csharp]
+cdylib_name = "procmon_csharp"
+
+
+[build-dependencies]
+uniffi = { version = "0.25", features = ["build"] }
+
+[dev-dependencies]
+uniffi = { version = "0.25", features = ["bindgen-tests"] }

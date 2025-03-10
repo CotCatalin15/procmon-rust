@@ -53,9 +53,9 @@ kmum-common = { path = "../kmum-common", version = "*" }
 #maple = { git = "https://github.com/CotCatalin15/windows-driver-rust-framework", version = "*", branch = "feature/minifilter" }
 
 #[patch."https://github.com/CotCatalin15/windows-driver-rust-framework"]
-wdrf = { path = "D:/Programare/Rust/windows-driver-rust-framework/crates/wdrf", version = "*" }
-wdrf-std = { path = "D:/Programare/Rust/windows-driver-rust-framework/crates/wdrf-std", version = "*" }
-maple = { path = "D:/Programare/Rust/windows-driver-rust-framework/crates/maple", version = "*" }
+wdrf = { path = "D:/Programare/Rust/Github/windows-driver-rust-framework/crates/wdrf", version = "*" }
+wdrf-std = { path = "D:/Programare/Rust/Github/windows-driver-rust-framework/crates/wdrf-std", version = "*" }
+maple = { path = "D:/Programare/Rust/Github/windows-driver-rust-framework/crates/maple", version = "*" }
 
 
 [build-dependencies]
