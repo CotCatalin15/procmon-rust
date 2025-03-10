@@ -1,26 +1,32 @@
+use std::marker::PhantomData;
+
 use kmum_common::{KmMessage, KmReplyMessage, UmSendMessage, MAX_UM_SEND_MESSAGE_BUFFER_SIZE};
 
 use super::{
     dispatcher::{Dispatcher, FilterBufferHandler},
-    CommunicationError,
+    CommunicationError, CommunicationInterface, EventProcessor,
 };
 
-pub trait MessageProcessor: Send + Sync + 'static {
-    fn process(&self, message: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>;
-}
-
-pub struct Communication {
+pub struct DriverCommunication {
     dispatcher: Dispatcher,
 }
 
-impl Communication {
+impl DriverCommunication {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for DriverCommunication {
+    fn default() -> Self {
         Self {
             dispatcher: Dispatcher::new(),
         }
     }
+}
 
-    pub fn send_message_blocking(
+impl CommunicationInterface for DriverCommunication {
+    fn send_message_blocking(
         &self,
         message: &UmSendMessage,
     ) -> anyhow::Result<Option<KmReplyMessage>, CommunicationError> {
@@ -43,19 +49,33 @@ impl Communication {
         }
     }
 
-    pub fn process_blocking<P>(&self, processor: P)
-    where
-        P: Fn(&mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>,
-    {
+    fn process_blocking<P: EventProcessor>(&self, processor: P) {
         self.dispatcher
             .process_blocking(CommunicationProcessorCallback { processor });
     }
 }
 
-struct CommunicationProcessorCallback<
-    P: Fn(&mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>,
-> {
+struct CommunicationProcessorCallback<P: EventProcessor> {
     processor: P,
+}
+
+impl<P> FilterBufferHandler for CommunicationProcessorCallback<P>
+where
+    P: EventProcessor,
+{
+    fn handle_buffer(
+        &self,
+        receive_buffer: &[u8],
+        _reply_buffer: &mut [u8],
+    ) -> anyhow::Result<(), CommunicationError> {
+        let mut km_iter = KmMessageIterator {
+            buffer: receive_buffer,
+        };
+
+        let _ = self.processor.process(&mut km_iter);
+
+        Ok(())
+    }
 }
 
 pub struct KmMessageIterator<'a> {
@@ -72,23 +92,5 @@ impl<'a> Iterator for KmMessageIterator<'a> {
         } else {
             None
         }
-    }
-}
-
-impl<P: Fn(&mut KmMessageIterator) -> anyhow::Result<(), CommunicationError>> FilterBufferHandler
-    for CommunicationProcessorCallback<P>
-{
-    fn handle_buffer(
-        &self,
-        receive_buffer: &[u8],
-        _reply_buffer: &mut [u8],
-    ) -> anyhow::Result<(), CommunicationError> {
-        let mut km_iter = KmMessageIterator {
-            buffer: receive_buffer,
-        };
-
-        let _ = (self.processor)(&mut km_iter);
-
-        Ok(())
     }
 }

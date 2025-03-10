@@ -1,73 +1,66 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use kmum_common::KmMessage;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    spawn,
-    sync::mpsc::channel,
-    task::{spawn_blocking, JoinSet},
+    sync::mpsc::{channel, Receiver, Sender},
+    task::JoinSet,
 };
 
-use crate::communication::{communication::Communication, CommunicationError};
+use crate::communication::{CommunicationError, CommunicationInterface, EventProcessor};
 
-pub struct ProcmonRuntime {
-    communication: Arc<Communication>,
+pub struct ProcmonRuntime<C: CommunicationInterface> {
+    communication: Arc<C>,
 }
 
-impl ProcmonRuntime {
-    pub fn new() -> Self {
+impl<C: CommunicationInterface> ProcmonRuntime<C> {
+    pub fn new(communication: C) -> Self {
         Self {
-            communication: Arc::new(Communication::new()),
+            communication: Arc::new(communication),
         }
     }
 
-    pub async fn run(&self) {
+    pub async fn run<F, Fut>(self, async_consumer: F)
+    where
+        F: FnOnce(Receiver<KmMessage>) -> Fut,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
         //process events and stuff
 
-        let mut handlees = JoinSet::new();
+        let mut handles = JoinSet::new();
 
+        tracing::info!("Starting runtime engine");
+
+        let (sender, receiver) = channel(512);
         for _ in 0..6 {
             let comm = self.communication.clone();
-            let (sender, mut receiver) = channel(512);
-            handlees.spawn_blocking(move || {
-                comm.process_blocking(|iter| {
-                    for msg in iter {
-                        sender
-                            .blocking_send(msg)
-                            .map_err(|_| CommunicationError::TokioSender)?;
-                    }
-                    Ok(())
+            let sender_clone = sender.clone();
+            handles.spawn_blocking(move || {
+                comm.process_blocking(RuntimeEventProcessor {
+                    sender: sender_clone,
                 });
             });
-
-            handlees.spawn(async {
-                let mut file = tokio::fs::File::open("test.txt").await.unwrap();
-
-                let mut msg = [0u8; 1024];
-                file.write_all("Hello".as_bytes()).await.unwrap();
-                file.read(&mut msg).await.unwrap();
-
-                drop(file);
-            });
-
-            handlees.spawn(async move {
-                let mut recv_buffer: Vec<KmMessage> = Vec::new();
-                loop {
-                    let size = receiver.recv_many(&mut recv_buffer, 512).await;
-                    if size == 0 {
-                        break;
-                    }
-
-                    let messages = &recv_buffer[..size];
-                    for msg in messages {
-                        if msg.process.pid == std::process::id() as u64 {
-                            dbg!(msg);
-                        }
-                    }
-                }
-            });
         }
+        handles.spawn(async_consumer(receiver));
 
-        handlees.join_all().await;
+        handles.join_all().await;
+    }
+}
+
+struct RuntimeEventProcessor {
+    sender: Sender<KmMessage>,
+}
+
+impl EventProcessor for RuntimeEventProcessor {
+    fn process<I>(&self, iter: &mut I) -> anyhow::Result<(), CommunicationError>
+    where
+        I: Iterator<Item = KmMessage>,
+    {
+        for msg in iter {
+            self.sender
+                .blocking_send(msg)
+                .map_err(|_| CommunicationError::TokioSender)?;
+        }
+        Ok(())
     }
 }

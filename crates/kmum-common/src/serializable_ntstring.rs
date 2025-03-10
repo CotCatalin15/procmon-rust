@@ -6,7 +6,7 @@ use core::{
 use nt_string::unicode_string::NtUnicodeString;
 use serde::{de::Visitor, Deserialize, Serialize};
 
-pub struct SerializableNtString(NtUnicodeString);
+pub struct SerializableNtString(pub NtUnicodeString);
 
 impl SerializableNtString {
     pub fn new(nt_str: NtUnicodeString) -> Self {

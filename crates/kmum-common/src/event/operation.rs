@@ -22,4 +22,6 @@ pub enum EventFileSystemOperation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum EventRegistryOperation {}
+pub enum EventRegistryOperation {
+    Open(),
+}

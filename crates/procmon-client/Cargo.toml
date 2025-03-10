@@ -10,9 +10,20 @@ windows-sys = { version = "0.52", features = [
     "Win32_Security",
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_System_SystemInformation"
 ] }
-procmon-core.workspace = true
 
+rusqlite = { version = "0.34.0", features = ["bundled"] }
+chrono = "0.4"
+
+
+procmon-core.workspace = true
+nt-string.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tokio = { version = "1.43.0", features = ["full"] }
+rand = "0.8"
+
+kmum-common = { path = "../kmum-common", version = "*" }
