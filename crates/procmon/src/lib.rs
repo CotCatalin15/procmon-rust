@@ -49,7 +49,7 @@ fn driver_main(driver: &mut DRIVER_OBJECT, _registry_path: &UNICODE_STRING) -> a
         process_cache: cache,
     })?;
 
-    DRIVER_CONTEXT.get().process_cache.try_start().unwrap();
+    DRIVER_CONTEXT.get().process_cache.try_start()?;
 
     unsafe {
         info!("Starting the minifilter");

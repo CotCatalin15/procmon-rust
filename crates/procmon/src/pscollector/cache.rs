@@ -6,14 +6,30 @@ use kmum_common::{
 };
 use wdrf::process::{
     notifier::PsNotifierRegistration, process_create_notifier::PsCreateNotifyCallback,
-    PsCreateNotifyInfo,
+    ps_lookup_by_process_id, PsCreateNotifyInfo,
 };
-use wdrf_std::{kmalloc::TaggedObject, object::ArcKernelObj, structs::PKPROCESS, time::SystemTime};
+use wdrf_std::{
+    boxed::Box,
+    dbg_break,
+    kmalloc::TaggedObject,
+    nt_success,
+    object::ArcKernelObj,
+    structs::PKPROCESS,
+    time::SystemTime,
+    vec::{Vec, VecCreate, VecExt},
+};
 use windows_sys::{
-    Wdk::System::SystemServices::PsGetCurrentThreadId, Win32::Foundation::STATUS_SUCCESS,
+    Wdk::System::SystemServices::PsGetCurrentThreadId,
+    Win32::{
+        Foundation::{STATUS_INFO_LENGTH_MISMATCH, STATUS_SUCCESS},
+        System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION,
+    },
 };
 
-use crate::global::DRIVER_CONTEXT;
+use crate::{
+    global::DRIVER_CONTEXT,
+    imports::{DYN_IMPORTS, SYSTEM_PROCESS_INFORMATION_CLASS},
+};
 
 use super::{collection::PsInfoContainer, proc_info_factory::ProcessInformationFactory};
 
@@ -39,7 +55,9 @@ impl ProcessCollectorCache {
     pub fn try_start(&self) -> anyhow::Result<()> {
         self.ps_notifier
             .try_start()
-            .map_err(|_| anyhow::Error::msg("Failed to start process collector cache"))
+            .map_err(|_| anyhow::Error::msg("Failed to start process collector cache"))?;
+
+        self.scan_unmonitored()
     }
 
     pub fn try_stop(&self) -> anyhow::Result<()> {
@@ -78,6 +96,102 @@ impl ProcessCollectorCache {
     fn internal_on_process_exit(&self, pid: u64) -> Option<UniqueProcessId> {
         self.container.unmap_pid(pid)
     }
+
+    fn scan_unmonitored(&self) -> anyhow::Result<()> {
+        let mut buffer: Vec<u8> = Vec::create();
+        buffer.try_resize(1024 * 4, 0)?;
+
+        unsafe {
+            dbg_break();
+        }
+
+        let mut returned_length = 0;
+        loop {
+            let status = unsafe {
+                DYN_IMPORTS.get().zw_query_system_information(
+                    SYSTEM_PROCESS_INFORMATION_CLASS,
+                    buffer.as_mut_ptr() as _,
+                    buffer.len() as _,
+                    &mut returned_length,
+                )
+            };
+
+            if nt_success(status) {
+                break;
+            } else if status == STATUS_INFO_LENGTH_MISMATCH {
+                returned_length *= 2;
+
+                let resize_ammount = if buffer.len() > (returned_length as usize) {
+                    continue;
+                } else {
+                    (returned_length as usize) - buffer.len()
+                };
+
+                buffer.try_resize(resize_ammount, 0)?;
+            } else {
+                maple::error!(
+                    "zw_query_system_information failed with status: {:x}",
+                    status
+                );
+                return Err(anyhow::Error::msg("zw_query_system_information failed"));
+            }
+        }
+
+        if returned_length as usize > buffer.len() {
+            maple::error!("Buffer still too small after resize");
+            return Err(anyhow::Error::msg(
+                "Buffer too small for process information",
+            ));
+        }
+
+        struct ProcessInfoIterator<'a> {
+            info: Option<&'a SYSTEM_PROCESS_INFORMATION>,
+        }
+
+        impl<'a> Iterator for ProcessInfoIterator<'a> {
+            type Item = &'a SYSTEM_PROCESS_INFORMATION;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                let current = self.info.take()?;
+
+                self.info = if current.NextEntryOffset == 0 {
+                    None
+                } else {
+                    unsafe {
+                        let next = (current as *const _ as *const u8)
+                            .add(current.NextEntryOffset as usize)
+                            as *const SYSTEM_PROCESS_INFORMATION;
+                        Some(&*next)
+                    }
+                };
+
+                Some(current)
+            }
+        }
+
+        if returned_length < core::mem::size_of::<SYSTEM_PROCESS_INFORMATION>() as u32 {
+            maple::error!("No process information returned");
+            return Err(anyhow::Error::msg("No process information available"));
+        }
+
+        let mut iter = ProcessInfoIterator {
+            info: Some(unsafe { &*(buffer.as_ptr() as *const SYSTEM_PROCESS_INFORMATION) }),
+        };
+
+        for proc in iter {
+            let pid = proc.UniqueProcessId as u64;
+            let eprocess = ps_lookup_by_process_id(pid as _);
+
+            if let Some(eprocess) = eprocess {
+                self.container.map_pid(
+                    pid,
+                    ProcessInformationFactory::try_create_from_eprocess(&eprocess, pid),
+                );
+            }
+        }
+
+        Ok(())
+    }
 }
 
 struct CacheNotifierCallback {}
@@ -101,7 +215,7 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
         if let Some(process_info) = process_info {
             let op: EventProcessOperation = EventProcessOperation::ProcessCreate {
                 pid,
-                cmd: None, /*process_info.cmd */
+                cmd: process_info.cmd,
             };
             let event = KmMessage {
                 event: EventCompoent {
