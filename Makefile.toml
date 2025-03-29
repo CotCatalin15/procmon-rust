@@ -21,4 +21,6 @@ args = ["make", "default", "--profile", "dev-abort"]
 [tasks.build-all]
 description = "Builds all crates (procmon-core, procmon-client, and procmon)"
 workspace = false
+command = "python"
+args = ["./build/copyfiles.py"]
 dependencies = ["build-usermode", "build-driver"]

@@ -21,9 +21,15 @@ type ZwQueryInformationProcessFn = unsafe extern "system" fn(
 
 type PsGetProcessInheritedFromUniqueProcessIdFn = unsafe extern "system" fn(PKPROCESS) -> HANDLE;
 
+pub const SYSTEM_PROCESS_INFORMATION_CLASS: u32 = 5;
+
+type ZwQuerySystemInformationFn =
+    unsafe extern "system" fn(u32, *mut core::ffi::c_void, u32, *mut u32) -> NTSTATUS;
+
 pub struct DynFncImports {
     fn_zw_query_information_process: ZwQueryInformationProcessFn,
     fn_ps_get_process_inherited_from_unique_process_id: PsGetProcessInheritedFromUniqueProcessIdFn,
+    fn_zw_query_system_information: ZwQuerySystemInformationFn,
 }
 
 #[repr(i32)]
@@ -97,9 +103,23 @@ impl DynFncImports {
             }
         };
 
+        let zw_query_system_information = {
+            let fnc_ptr = Self::load_fnc(widestring::u16cstr!("ZwQuerySystemInformation"));
+
+            // Check if the function pointer was successfully loaded
+            if let Some(ptr) = fnc_ptr {
+                // Cast the function pointer to the correct function type
+                unsafe { core::mem::transmute::<*mut c_void, ZwQuerySystemInformationFn>(ptr) }
+            } else {
+                // Return an error if the function could not be loaded
+                return Err(anyhow::anyhow!("Failed to load ZwQuerySystemInformation")).into();
+            }
+        };
+
         DYN_IMPORTS.init(registry, move || DynFncImports {
             fn_zw_query_information_process: zw_query_info,
             fn_ps_get_process_inherited_from_unique_process_id: ps_inherited_process_id,
+            fn_zw_query_system_information: zw_query_system_information,
         })
     }
 
@@ -125,5 +145,20 @@ impl DynFncImports {
         eprocess: PKPROCESS,
     ) -> HANDLE {
         (self.fn_ps_get_process_inherited_from_unique_process_id)(eprocess)
+    }
+
+    pub unsafe fn zw_query_system_information(
+        &self,
+        system_information_class: u32,
+        system_information: *mut core::ffi::c_void,
+        system_information_length: u32,
+        return_lenght: *mut u32,
+    ) -> NTSTATUS {
+        (self.fn_zw_query_system_information)(
+            system_information_class,
+            system_information,
+            system_information_length,
+            return_lenght,
+        )
     }
 }

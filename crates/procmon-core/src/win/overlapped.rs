@@ -9,6 +9,7 @@ use super::{event::Event, CloseHandlePolicy, Handle};
 #[repr(transparent)]
 pub struct Overlapped(OVERLAPPED);
 
+#[allow(dead_code)]
 impl Overlapped {
     pub fn new() -> Option<Self> {
         let event = Event::new();
@@ -49,11 +50,13 @@ impl Drop for Overlapped {
     }
 }
 
+#[allow(dead_code)]
 pub struct OverlappedJoin<'a> {
     handle: HANDLE,
     overlapped: &'a mut Overlapped,
 }
 
+#[allow(dead_code)]
 impl<'a> OverlappedJoin<'a> {
     pub fn new(ov: &'a mut Overlapped, handle: HANDLE) -> Self {
         Self {

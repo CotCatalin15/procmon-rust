@@ -7,6 +7,9 @@ use super::Handle;
 
 pub struct Event(Handle);
 
+unsafe impl Send for Event {}
+unsafe impl Sync for Event {}
+
 impl Event {
     pub fn new() -> Option<Self> {
         let event =

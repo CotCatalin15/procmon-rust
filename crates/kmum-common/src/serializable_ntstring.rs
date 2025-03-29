@@ -6,7 +6,10 @@ use core::{
 use nt_string::unicode_string::NtUnicodeString;
 use serde::{de::Visitor, Deserialize, Serialize};
 
-pub struct SerializableNtString(NtUnicodeString);
+pub struct SerializableNtString(pub NtUnicodeString);
+
+unsafe impl Send for SerializableNtString {}
+unsafe impl Sync for SerializableNtString {}
 
 impl SerializableNtString {
     pub fn new(nt_str: NtUnicodeString) -> Self {
@@ -20,13 +23,21 @@ impl SerializableNtString {
 
 impl Debug for SerializableNtString {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(&self.0, f)
+        if self.is_empty() {
+            Display::fmt("[[[Empty]]]", f)
+        } else {
+            Display::fmt(&self.0, f)
+        }
     }
 }
 
 impl Display for SerializableNtString {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(&self.0, f)
+        if self.is_empty() {
+            Display::fmt("[[[Empty]]]", f)
+        } else {
+            Display::fmt(&self.0, f)
+        }
     }
 }
 

@@ -1,14 +1,11 @@
-use kmum_common::{KmReplyMessage, UmSendMessage};
-use processor::CommunicationProcessor;
-use processor::{KmMessageIterator, MessageProcessor};
-use tracing::info;
-use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+use kmum_common::{KmMessage, KmReplyMessage, UmSendMessage};
 
 mod dispatcher;
 mod message_handler;
 mod parsed;
-mod processor;
 mod raw_communication;
+
+pub mod driver_communication;
 
 #[derive(Debug)]
 pub enum CommunicationError {
@@ -16,40 +13,22 @@ pub enum CommunicationError {
     NoMemory,
     Port,
     NoWaiterPresent,
+    TokioSender,
 }
 
-#[allow(dead_code)]
-pub struct Communication {
-    processor: CommunicationProcessor,
+pub trait EventProcessor {
+    fn process<I>(&self, iter: &mut I) -> anyhow::Result<(), CommunicationError>
+    where
+        I: Iterator<Item = KmMessage>;
 }
 
-impl Communication {
-    pub fn new() -> Self {
-        let processor = CommunicationProcessor::new(1, CommunicationMessageHandler {});
-
-        Self { processor }
-    }
-
-    pub fn send_message(
+pub trait CommunicationInterface: Sync + Send + 'static {
+    fn send_message_blocking(
         &self,
-        message: UmSendMessage,
-    ) -> Result<Option<KmReplyMessage>, CommunicationError> {
-        self.processor.send_message(&message)
-    }
-}
+        message: &UmSendMessage,
+    ) -> anyhow::Result<Option<KmReplyMessage>, CommunicationError>;
 
-struct CommunicationMessageHandler {}
+    fn process_blocking<P: EventProcessor>(&self, processor: P);
 
-impl MessageProcessor for CommunicationMessageHandler {
-    fn process(&self, iter: &mut KmMessageIterator) -> anyhow::Result<(), CommunicationError> {
-        for msg in iter {
-            if msg.process.pid != unsafe { GetCurrentProcessId() as u64 } {
-                continue;
-            }
-
-            info!("Received message from kernel: {:#?}", msg);
-        }
-
-        Ok(())
-    }
+    fn stop(&self);
 }

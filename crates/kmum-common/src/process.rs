@@ -15,3 +15,6 @@ pub struct ProcessInformation {
 
     pub unique_id: UniqueProcessId,
 }
+
+unsafe impl Send for ProcessInformation {}
+unsafe impl Sync for ProcessInformation {}
