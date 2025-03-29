@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use kmum_common::{KmMessage, KmReplyMessage, UmSendMessage, MAX_UM_SEND_MESSAGE_BUFFER_SIZE};
+use windows_sys::Wdk::Foundation::NonPagedPoolExecute;
 
 use super::{
     dispatcher::{Dispatcher, FilterBufferHandler},

@@ -7,10 +7,10 @@ use kmum_common::{
     get_communication_port_name, MAX_KM_MESSAGE_RECEIVE_SIZE, MAX_UM_REPLY_MESSAGE_SIZE,
 };
 use windows_sys::Win32::{
-    Foundation::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL, WAIT_OBJECT_0},
+    Foundation::{GetLastError, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, WAIT_OBJECT_0},
     System::{
         Threading::{WaitForMultipleObjects, INFINITE},
-        IO::GetOverlappedResult,
+        IO::{CancelIoEx, GetOverlappedResult},
     },
 };
 
@@ -83,7 +83,10 @@ impl Dispatcher {
             let status =
                 unsafe { WaitForMultipleObjects(2, handles.as_ptr(), false as _, INFINITE) };
             match status {
-                WAIT_OBJECT_0 => return,
+                WAIT_OBJECT_0 => unsafe {
+                    CancelIoEx(self.raw_communication.handle(), overlapped.ov());
+                    return;
+                },
                 WAIT_OBJECT_1 => {}
                 _ => panic!(
                     "Unknown waiting result from WaitForMultipleObjects: {:x}",
@@ -99,7 +102,8 @@ impl Dispatcher {
                     &mut transfered,
                     false as _,
                 ) {
-                    panic!("GetOverlappedResult returned false");
+                    let last_error = GetLastError();
+                    panic!("GetOverlappedResult returned false, last error {last_error}");
                 }
 
                 transfered
@@ -109,6 +113,7 @@ impl Dispatcher {
                 let send_parsed = send_buffer.as_parsed(message_size);
                 let mut reply_parsed = reply_buffer.as_parsed();
 
+                tracing::debug!("Sending received buffer to handler");
                 let result = handler.handle_buffer(send_parsed.buffer, reply_parsed.buffer);
 
                 match result {

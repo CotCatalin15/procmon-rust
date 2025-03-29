@@ -115,7 +115,7 @@ impl<C: CommunicationInterface> ClientRuntimeInterface for InternalRuntime<C> {
             }
         }
 
-        for i in 0..num_threads {
+        for _ in 0..num_threads {
             let communication_clone = self.communication.clone();
             let storage_clone = self.storage.clone();
             spawn_blocking(move || {

@@ -15,7 +15,7 @@ use windows_sys::{
 
 use crate::global::DRIVER_CONTEXT;
 
-use super::collection::PsInfoContainer;
+use super::{collection::PsInfoContainer, proc_info_factory::ProcessInformationFactory};
 
 pub struct ProcessCollectorCache {
     container: PsInfoContainer,
@@ -64,8 +64,15 @@ impl ProcessCollectorCache {
         eprocess: &ArcKernelObj<PKPROCESS>,
         pid: u64,
         process_info: &PsCreateNotifyInfo,
-    ) -> Option<UniqueProcessId> {
-        self.container.get_info(pid).map(|info| info.unique_id)
+    ) -> UniqueProcessId {
+        self.container.map_pid(
+            pid,
+            ProcessInformationFactory::try_create_from_process_create(
+                eprocess,
+                pid as _,
+                process_info,
+            ),
+        )
     }
 
     fn internal_on_process_exit(&self, pid: u64) -> Option<UniqueProcessId> {
@@ -87,34 +94,32 @@ impl PsCreateNotifyCallback for CacheNotifierCallback {
         let pid = pid as u64;
         let cache = &DRIVER_CONTEXT.get().process_cache;
 
-        let unique_id = cache.internal_on_process_create(&process, pid, create_info);
+        let uid = cache.internal_on_process_create(&process, pid, create_info);
 
-        if let Some(uid) = unique_id {
-            let process_info = cache.get_process_info_from_uid(uid);
+        let process_info = cache.get_process_info_from_uid(uid);
 
-            if let Some(process_info) = process_info {
-                let op: EventProcessOperation = EventProcessOperation::ProcessCreate {
+        if let Some(process_info) = process_info {
+            let op: EventProcessOperation = EventProcessOperation::ProcessCreate {
+                pid,
+                cmd: None, /*process_info.cmd */
+            };
+            let event = KmMessage {
+                event: EventCompoent {
+                    date: SystemTime::new().raw_time(),
+                    thread: create_info.client_id.UniqueThread as _,
+                    operation: EventClass::Process(op),
+                    result: STATUS_SUCCESS,
+                    path: process_info.path,
+                    duration: 0,
+                },
+                process: SimpleProcessDetails {
                     pid,
-                    cmd: process_info.cmd,
-                };
-                let event = KmMessage {
-                    event: EventCompoent {
-                        date: SystemTime::new().raw_time(),
-                        thread: create_info.client_id.UniqueThread as _,
-                        operation: EventClass::Process(op),
-                        result: STATUS_SUCCESS,
-                        path: process_info.path,
-                        duration: 0,
-                    },
-                    process: SimpleProcessDetails {
-                        pid,
-                        unique_id: uid,
-                    },
-                    stack: EventStack::new(),
-                };
+                    unique_id: uid,
+                },
+                stack: EventStack::new(),
+            };
 
-                let _ = DRIVER_CONTEXT.get().communication.try_send_event(event);
-            }
+            let _ = DRIVER_CONTEXT.get().communication.try_send_event(event);
         }
 
         Ok(())

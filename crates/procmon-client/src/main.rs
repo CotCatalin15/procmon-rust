@@ -13,6 +13,8 @@ use clap::Parser;
 use clap::ValueEnum;
 use client_runtime::ClientRuntime;
 use eframe::NativeOptions;
+use egui::Vec2;
+use egui::ViewportBuilder;
 use events_storage::EventStorage;
 use kmum_common::KmMessage;
 use std::num::NonZeroU32;
@@ -33,15 +35,11 @@ struct ProcmonArgs {
     #[arg(short, long, default_value = "fake")]
     communication: CommunicationType,
 
-    #[arg(short, long, default_value = "1")]
+    #[arg(short, long, default_value = "4")]
     num_threads: NonZeroU32,
 }
 
 fn main() {
-    std::panic::set_hook(Box::new(|_| {
-        std::intrinsics::breakpoint();
-    }));
-
     let args = ProcmonArgs::parse();
     println!("Args: {:#?}", args);
 
@@ -67,7 +65,13 @@ fn main() {
 
     eframe::run_native(
         "Procmon in Rust",
-        NativeOptions::default(),
+        NativeOptions {
+            viewport: ViewportBuilder {
+                min_inner_size: Some([1000.0; 2].into()),
+                ..ViewportBuilder::default()
+            },
+            ..NativeOptions::default()
+        },
         Box::new(|_cc| Ok(Box::new(ProcmonApp::new(runtime, storage)))),
     )
     .unwrap();
