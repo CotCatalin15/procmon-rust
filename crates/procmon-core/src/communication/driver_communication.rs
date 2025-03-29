@@ -15,12 +15,20 @@ impl DriverCommunication {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn new_test(test_pid: u64) -> Self {
+        Self {
+            dispatcher: Dispatcher::new(kmum_common::ClientConnectMessage::Testing {
+                filter_pid: test_pid,
+            }),
+        }
+    }
 }
 
 impl Default for DriverCommunication {
     fn default() -> Self {
         Self {
-            dispatcher: Dispatcher::new(),
+            dispatcher: Dispatcher::new(kmum_common::ClientConnectMessage::Any),
         }
     }
 }
@@ -52,6 +60,10 @@ impl CommunicationInterface for DriverCommunication {
     fn process_blocking<P: EventProcessor>(&self, processor: P) {
         self.dispatcher
             .process_blocking(CommunicationProcessorCallback { processor });
+    }
+
+    fn stop(&self) {
+        self.dispatcher.stop();
     }
 }
 

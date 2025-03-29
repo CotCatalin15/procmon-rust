@@ -24,14 +24,23 @@ unsafe impl Send for RawCommunication {}
 unsafe impl Sync for RawCommunication {}
 
 impl PortHandle {
-    pub fn new(name: &[u16]) -> anyhow::Result<Self> {
+    pub fn new(
+        name: &[u16],
+        connect_msg: Option<kmum_common::ClientConnectMessage>,
+    ) -> anyhow::Result<Self> {
         let mut handle = 0;
+
+        let mut connect_buffer = [0u8; 1024];
+        let msg = connect_msg.unwrap_or_else(|| kmum_common::ClientConnectMessage::Any);
+
+        let context = postcard::to_slice(&msg, &mut connect_buffer).unwrap();
+
         let status = unsafe {
             FilterConnectCommunicationPort(
                 name.as_ptr(),
                 0,
-                core::ptr::null(),
-                0,
+                context.as_ptr() as _,
+                connect_buffer.len() as _,
                 core::ptr::null(),
                 &mut handle,
             )
@@ -53,8 +62,11 @@ impl Drop for PortHandle {
 }
 
 impl RawCommunication {
-    pub fn new(name: &[u16]) -> anyhow::Result<Self> {
-        let port = PortHandle::new(name)?;
+    pub fn new(
+        name: &[u16],
+        options: Option<kmum_common::ClientConnectMessage>,
+    ) -> anyhow::Result<Self> {
+        let port = PortHandle::new(name, options)?;
 
         Ok(Self { port })
     }

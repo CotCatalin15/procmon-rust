@@ -37,10 +37,13 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    pub fn new() -> Self {
+    pub fn new(options: kmum_common::ClientConnectMessage) -> Self {
         Self {
-            raw_communication: RawCommunication::new(get_communication_port_name().as_slice())
-                .unwrap(),
+            raw_communication: RawCommunication::new(
+                get_communication_port_name().as_slice(),
+                Some(options),
+            )
+            .unwrap(),
             stop_event: Event::new().unwrap(),
         }
     }

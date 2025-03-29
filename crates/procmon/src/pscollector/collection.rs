@@ -85,11 +85,12 @@ impl PsInfoContainer {
         let next_uid = self.last_unique_id.fetch_add(1, Ordering::SeqCst);
         let eprocess = ps_lookup_by_process_id(pid as _)?;
         let mut uid_guard = self.pid_to_unique_id.write();
+        let mut proc_guard = self.process_information_map.write();
 
         match uid_guard.try_insert(pid, next_uid) {
             Ok(_) => {
-                let mut proc_guard = self.process_information_map.write();
-                proc_guard.insert(
+                maple::info!("Mapping pid: {pid} -> UID: {next_uid}");
+                let old = proc_guard.insert(
                     next_uid,
                     ProcessMapping::Partial {
                         uid: next_uid,
@@ -98,9 +99,16 @@ impl PsInfoContainer {
                     },
                 );
 
+                if old.is_some() {
+                    maple::info!("WHY ......");
+                }
+
                 Some(next_uid)
             }
-            Err(occ) => Some(*occ.entry.key()),
+            Err(occ) => {
+                maple::info!("ALREADY MAPPED pid: {pid} -> UID: {}", *occ.entry.key());
+                Some(*occ.entry.key())
+            }
         }
     }
 

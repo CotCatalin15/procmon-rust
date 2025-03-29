@@ -1,6 +1,11 @@
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
-use kmum_common::{event::*, serializable_ntstring::SerializableNtString, *};
+use kmum_common::{
+    event::*, process::ProcessInformation, serializable_ntstring::SerializableNtString, *,
+};
 use nt_string::unicode_string::NtUnicodeString;
 use procmon_core::communication::{CommunicationError, CommunicationInterface};
 use rand::Rng;
@@ -8,7 +13,9 @@ use windows_sys::Win32::{
     Foundation::FILETIME, System::SystemInformation::GetSystemTimeAsFileTime,
 };
 
-pub struct FakeCommunication {}
+pub struct FakeCommunication {
+    stop_signal: AtomicBool,
+}
 
 impl CommunicationInterface for FakeCommunication {
     fn send_message_blocking(
@@ -16,34 +23,53 @@ impl CommunicationInterface for FakeCommunication {
         message: &UmSendMessage,
     ) -> anyhow::Result<Option<KmReplyMessage>, procmon_core::communication::CommunicationError>
     {
-        Err(CommunicationError::Port)
+        match message {
+            UmSendMessage::GetExeName(pid) => {
+                let path = format!("Process{}.exe", pid);
+                Ok(Some(KmReplyMessage::ExeName(SerializableNtString(
+                    NtUnicodeString::try_from(&path).unwrap(),
+                ))))
+            }
+            _ => Err(CommunicationError::Port),
+        }
     }
 
     fn process_blocking<P: procmon_core::communication::EventProcessor>(&self, processor: P) {
         loop {
+            if self.stop_signal.load(Ordering::Acquire) {
+                break;
+            }
+
             let events = Self::generate_random_events();
+            tracing::info!("Generated {} number of new events", events.len());
             let mut iter = events.into_iter();
             let _ = processor.process(&mut iter);
 
-            std::thread::sleep(Duration::from_secs(10));
+            std::thread::sleep(Duration::from_secs(1));
         }
+    }
+
+    fn stop(&self) {
+        self.stop_signal.store(true, Ordering::Release);
     }
 }
 
 impl FakeCommunication {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            stop_signal: AtomicBool::new(false),
+        }
     }
 
     /// Generates a random number of `KmMessage` events
     pub fn generate_random_events() -> Vec<KmMessage> {
         let mut rng = rand::thread_rng();
-        let num_events = rng.gen_range(1..=10); // Generate 1 to 10 events
+        let num_events = rng.gen_range(100..=500); // Generate 1 to 10 events
 
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(num_events);
 
         for _ in 0..num_events {
-            let pid = rng.gen_range(1..=30); // Random PID between 1 and 30
+            let pid = rng.gen_range(0..400); // Random PID between 1 and 30
             let unique_id = pid; // Set unique_id to the same value as pid
 
             let process_details = SimpleProcessDetails { pid, unique_id };

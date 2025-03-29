@@ -28,4 +28,3 @@ postcard.workspace = true
 nt-string.workspace = true
 
 tracing.workspace = true
-tokio = { version = "1.43.0", features = ["full"] }

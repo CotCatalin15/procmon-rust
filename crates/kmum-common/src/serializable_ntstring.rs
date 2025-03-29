@@ -8,6 +8,9 @@ use serde::{de::Visitor, Deserialize, Serialize};
 
 pub struct SerializableNtString(pub NtUnicodeString);
 
+unsafe impl Send for SerializableNtString {}
+unsafe impl Sync for SerializableNtString {}
+
 impl SerializableNtString {
     pub fn new(nt_str: NtUnicodeString) -> Self {
         Self(nt_str)

@@ -1,6 +1,8 @@
 use core::{ops::DerefMut, time::Duration};
 
-use kmum_common::{KmMessage, KmReplyMessage, UmSendMessage, MAX_KM_MESSAGE_RECEIVE_SIZE};
+use kmum_common::{
+    ClientConnectMessage, KmMessage, KmReplyMessage, UmSendMessage, MAX_KM_MESSAGE_RECEIVE_SIZE,
+};
 use nt_string::unicode_string::NtUnicodeStr;
 use wdrf::minifilter::communication::client_communication::{
     FltClientCommunication, FltCommunicationCallback,
@@ -28,7 +30,7 @@ use wdrf_std::{
 use super::CommunicationError;
 
 pub trait MessagingCallback {
-    fn on_client(&self) -> anyhow::Result<()>;
+    fn on_client(&self, data: Option<ClientConnectMessage>) -> anyhow::Result<()>;
     fn on_message(
         &self,
         message: &UmSendMessage,
@@ -115,8 +117,14 @@ impl MessagingPortCallback {
 }
 
 impl FltCommunicationCallback for MessagingPortCallback {
-    fn connect(&self, _buffer: Option<&[u8]>) -> anyhow::Result<()> {
-        self.callback.on_client()
+    fn connect(&self, buffer: Option<&[u8]>) -> anyhow::Result<()> {
+        let connect_data = if let Some(buffer) = buffer {
+            postcard::from_bytes(buffer).ok()
+        } else {
+            None
+        };
+
+        self.callback.on_client(connect_data)
     }
 
     fn disconnect(&self) {

@@ -29,4 +29,6 @@ pub trait CommunicationInterface: Sync + Send + 'static {
     ) -> anyhow::Result<Option<KmReplyMessage>, CommunicationError>;
 
     fn process_blocking<P: EventProcessor>(&self, processor: P);
+
+    fn stop(&self);
 }

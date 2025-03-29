@@ -1,9 +1,10 @@
 #![no_std]
 
 use event::{EventCompoent, EventStack, SimpleProcessDetails};
-use nt_string::widestring::U16CStr;
-use process::ProcessInformation;
+use nt_string::{unicode_string::NtUnicodeString, widestring::U16CStr};
+use process::{ProcessInformation, UniqueProcessId};
 use serde::{Deserialize, Serialize};
+use serializable_ntstring::SerializableNtString;
 
 pub mod event;
 pub mod process;
@@ -35,10 +36,18 @@ pub enum UmReplyMessage {}
 //Um -> Km
 #[derive(Debug, Serialize, Deserialize)]
 pub enum UmSendMessage {
-    GetPidInfo(u64),
+    GetProcessInfo(UniqueProcessId),
+    GetExeName(UniqueProcessId),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum KmReplyMessage {
-    AboutPid(ProcessInformation),
+    ProcessInfo(ProcessInformation),
+    ExeName(SerializableNtString),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ClientConnectMessage {
+    Any,
+    Testing { filter_pid: u64 },
 }
