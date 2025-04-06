@@ -1,7 +1,7 @@
 #![no_std]
 
 use event::{EventCompoent, EventStack, SimpleProcessDetails};
-use nt_string::{unicode_string::NtUnicodeString, widestring::U16CStr};
+use nt_string::widestring::U16CStr;
 use process::{ProcessInformation, UniqueProcessId};
 use serde::{Deserialize, Serialize};
 use serializable_ntstring::SerializableNtString;

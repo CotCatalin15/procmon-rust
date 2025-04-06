@@ -1,6 +1,6 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 
-mod win;
+pub mod win;
 
 pub mod communication;

@@ -1,8 +1,3 @@
-use std::{
-    sync::Arc,
-    thread::{spawn, JoinHandle},
-};
-
 use kmum_common::{
     get_communication_port_name, MAX_KM_MESSAGE_RECEIVE_SIZE, MAX_UM_REPLY_MESSAGE_SIZE,
 };

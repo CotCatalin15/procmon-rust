@@ -3,9 +3,7 @@ use std::{
     time::Duration,
 };
 
-use kmum_common::{
-    event::*, process::ProcessInformation, serializable_ntstring::SerializableNtString, *,
-};
+use kmum_common::{event::*, serializable_ntstring::SerializableNtString, *};
 use nt_string::unicode_string::NtUnicodeString;
 use procmon_core::communication::{CommunicationError, CommunicationInterface};
 use rand::Rng;
@@ -45,7 +43,7 @@ impl CommunicationInterface for FakeCommunication {
             let mut iter = events.into_iter();
             let _ = processor.process(&mut iter);
 
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_millis(600));
         }
     }
 
@@ -64,12 +62,12 @@ impl FakeCommunication {
     /// Generates a random number of `KmMessage` events
     pub fn generate_random_events() -> Vec<KmMessage> {
         let mut rng = rand::thread_rng();
-        let num_events = rng.gen_range(100..=500); // Generate 1 to 10 events
+        let num_events = rng.gen_range(10_000..=50_000); // Generate 1 to 10 events
 
         let mut events = Vec::with_capacity(num_events);
 
         for _ in 0..num_events {
-            let pid = rng.gen_range(0..400); // Random PID between 1 and 30
+            let pid = rng.gen_range(1..=30); // Random PID between 1 and 30
             let unique_id = pid; // Set unique_id to the same value as pid
 
             let process_details = SimpleProcessDetails { pid, unique_id };
@@ -109,7 +107,7 @@ impl FakeCommunication {
     fn generate_random_process_operation<R: Rng>(rng: &mut R) -> EventProcessOperation {
         match rng.gen_range(0..=1) {
             0 => EventProcessOperation::ProcessCreate {
-                pid: rng.gen_range(1..=30),
+                pid: rng.gen_range(3..=8),
                 cmd: None, // Placeholder for command
             },
             1 => EventProcessOperation::ProcessDestroy {

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod constatns;
 pub mod event;
 pub mod overlapped;
