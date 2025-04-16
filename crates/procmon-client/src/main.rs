@@ -11,7 +11,6 @@ mod event_storage;
 mod filters;
 mod notifier;
 mod process;
-mod process_cache;
 mod services;
 
 use app_ui::ProcmonUi;
@@ -27,6 +26,8 @@ use flume::bounded;
 use flume::unbounded;
 use flume::Sender;
 use kmum_common::KmMessage;
+use kmum_common::KmReplyMessage;
+use kmum_common::UmSendMessage;
 use notifier::NotificationBus;
 use process::ProcessManager;
 use procmon_core::communication::driver_communication::DriverCommunication;
@@ -89,7 +90,8 @@ fn main() {
         args.num_threads.get() as _,
     );
 
-    let communication = create_event_communication(event_sender, &args);
+    let (proc_manager, communication) =
+        create_communication_and_process_manager(event_sender, args);
 
     eframe::run_native(
         "Procmon in Rust",
@@ -103,6 +105,7 @@ fn main() {
         Box::new(|_cc| {
             Ok(Box::new(ProcmonUi::new(
                 event_storage.clone(),
+                proc_manager,
                 IndexerController::new(event_storage_bus, event_storage, 6),
             )))
         }),
@@ -110,39 +113,26 @@ fn main() {
     .unwrap();
 }
 
-fn create_event_communication(
-    event_sender: Sender<KmMessage>,
-    args: &ProcmonArgs,
-) -> EventCommunication {
-    let num_threads = args.num_threads.get() as usize;
-    match args.communication {
-        CommunicationType::Driver => EventCommunication::new(
-            event_sender,
-            Arc::new(DriverCommunication::new()),
-            num_threads,
-        ),
-        CommunicationType::Fake => EventCommunication::new(
-            event_sender,
-            Arc::new(FakeCommunication::new()),
-            num_threads,
-        ),
-        CommunicationType::DriverTest => {
-            let child = Command::new("procmon-tester.exe").spawn().unwrap();
-            EventCommunication::new(
-                event_sender,
-                Arc::new(DriverCommunication::new_test(child.id() as _)),
-                num_threads,
-            )
-        }
-    }
-}
-
-/*
 fn create_communication_and_process_manager(
     sender: Sender<KmMessage>,
     args: ProcmonArgs,
 ) -> (Arc<ProcessManager>, EventCommunication) {
-    impl_create_communication_and_process_manager(FakeCommunication::new(), sender, args)
+    match args.communication {
+        CommunicationType::Driver => {
+            impl_create_communication_and_process_manager(DriverCommunication::new(), sender, args)
+        }
+        CommunicationType::Fake => {
+            impl_create_communication_and_process_manager(FakeCommunication::new(), sender, args)
+        }
+        CommunicationType::DriverTest => {
+            let child = Command::new("procmon-tester.exe").spawn().unwrap();
+            impl_create_communication_and_process_manager(
+                DriverCommunication::new_test(child.id() as _),
+                sender,
+                args,
+            )
+        }
+    }
 }
 
 fn impl_create_communication_and_process_manager<C: CommunicationInterface>(
@@ -154,15 +144,20 @@ fn impl_create_communication_and_process_manager<C: CommunicationInterface>(
 
     let event_communication =
         EventCommunication::new(sender, communication.clone(), args.num_threads.get() as _);
-    let process_manager = ProcessManager::new(move |message| {
-        let result = communication.send_message_blocking(&message);
+    let process_manager = ProcessManager::new(move |uid| {
+        let result = communication.send_message_blocking(&UmSendMessage::GetProcessInfo(uid));
 
         match result {
-            Ok(reply) => reply,
-            Err(_) => None,
+            Ok(Some(KmReplyMessage::ProcessInfo(info))) => Some(info),
+            Ok(Some(_)) => {
+                tracing::info!(
+                    "Expected process information, received other type of reply from KM"
+                );
+                None
+            }
+            _ => None,
         }
     });
 
     (Arc::new(process_manager), event_communication)
 }
-*/

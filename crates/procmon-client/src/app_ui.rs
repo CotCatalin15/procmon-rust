@@ -11,6 +11,7 @@ use kmum_common::{
 use crate::{
     event_storage::EventStorage,
     filters::SimpleFilter,
+    process::ProcessManager,
     services::{IndexData, IndexerController},
 };
 
@@ -21,18 +22,20 @@ struct IndexStorageView {
 }
 
 pub struct ProcmonUi {
-    hit_change: bool,
     storage: Arc<EventStorage>,
-
+    proc_manager: Arc<ProcessManager>,
     controller: IndexerController,
 }
 
 impl ProcmonUi {
-    pub fn new(storage: Arc<EventStorage>, controller: IndexerController) -> Self {
+    pub fn new(
+        storage: Arc<EventStorage>,
+        proc_manager: Arc<ProcessManager>,
+        controller: IndexerController,
+    ) -> Self {
         Self {
-            hit_change: false,
             storage,
-
+            proc_manager,
             controller,
         }
     }
@@ -43,15 +46,6 @@ impl eframe::App for ProcmonUi {
         ctx.request_repaint_after_secs(1.0);
 
         let mut current_view = None;
-
-        if self.hit_change == false && self.controller.num_events() >= 5_000_000 {
-            tracing::warn!("############################CHANGE FILTERS\n\n");
-
-            self.controller
-                .change_filters(vec![SimpleFilter::FilterPidLessEq(20)]);
-
-            self.hit_change = true;
-        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             TableBuilder::new(ui)
@@ -127,9 +121,23 @@ impl eframe::App for ProcmonUi {
                                         },
                                     );
                                     */
-                                    if !hit {
-                                        ui.label("Loading...");
-                                    }
+
+                                    let entry =
+                                        self.proc_manager.try_get_async(event.process.unique_id);
+
+                                    match entry {
+                                        crate::process::ProcessCacheEntry::Hit(
+                                            process_cache_information,
+                                        ) => match process_cache_information {
+                                            Some(info) => {
+                                                ui.label(format!("{}", info.get_process_name()))
+                                            }
+                                            None => ui.label("Unknown"),
+                                        },
+                                        crate::process::ProcessCacheEntry::Miss => {
+                                            ui.label("Loading...")
+                                        }
+                                    };
                                 });
 
                                 //pid

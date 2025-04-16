@@ -26,6 +26,7 @@ rand = "0.8"
 slab = "0.4"
 rayon = "1.10.0"
 flume = "0.11.1"
+dashmap = "6.1.0"
 
 kmum-common = { path = "../kmum-common", version = "*" }
 clap = { version = "4.5.32", features = ["derive"] }
