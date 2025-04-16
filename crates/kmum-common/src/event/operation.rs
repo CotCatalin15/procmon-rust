@@ -15,10 +15,33 @@ pub enum EventProcessOperation {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum EventFileSystemOperation {
-    Create { attribute: u16 },
-    Read { length: u64, offset: i64 },
-    Write { length: u64, offset: i64 },
+    Create {
+        attribute: u16,
+    },
+    Read {
+        length: u64,
+        offset: i64,
+    },
+    Write {
+        length: u64,
+        offset: i64,
+    },
+    Cleanup {},
     Close {},
+    QueryFileInfo {
+        info_class: u32,
+        buffer_len: u32,
+    },
+    SetFileInfo {
+        info_class: u32,
+        length: u32,
+    },
+    AcquireForSectionSync {
+        sync_type: u32,
+        page_protection: u32,
+        flags: u32,
+        allocation_attributes: u32,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]

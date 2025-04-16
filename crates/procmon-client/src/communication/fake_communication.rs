@@ -58,11 +58,10 @@ impl FakeCommunication {
             stop_signal: AtomicBool::new(false),
         }
     }
-
     /// Generates a random number of `KmMessage` events
     pub fn generate_random_events() -> Vec<KmMessage> {
         let mut rng = rand::thread_rng();
-        let num_events = rng.gen_range(10_000..=50_000); // Generate 1 to 10 events
+        let num_events = rng.gen_range(50_000..=100_000);
 
         let mut events = Vec::with_capacity(num_events);
 

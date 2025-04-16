@@ -44,11 +44,11 @@ impl eframe::App for ProcmonUi {
 
         let mut current_view = None;
 
-        if self.hit_change == false && self.controller.num_events() >= 1_000_000 {
+        if self.hit_change == false && self.controller.num_events() >= 5_000_000 {
             tracing::warn!("############################CHANGE FILTERS\n\n");
 
             self.controller
-                .change_filters(vec![SimpleFilter::FilterPid(4)]);
+                .change_filters(vec![SimpleFilter::FilterPidLessEq(20)]);
 
             self.hit_change = true;
         }
@@ -175,7 +175,11 @@ impl ProcmonUi {
             EventFileSystemOperation::Create { .. } => "Create",
             EventFileSystemOperation::Read { .. } => "Read",
             EventFileSystemOperation::Write { .. } => "Write",
+            EventFileSystemOperation::Cleanup {} => "Cleanup",
             EventFileSystemOperation::Close {} => "Close",
+            EventFileSystemOperation::QueryFileInfo { .. } => "QueryFileInfo",
+            EventFileSystemOperation::SetFileInfo { .. } => "SetFileInfo",
+            EventFileSystemOperation::AcquireForSectionSync { .. } => "AcquireForSectionSync",
         }
     }
 

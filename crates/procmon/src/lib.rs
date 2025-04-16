@@ -76,7 +76,11 @@ fn setup_filter(driver: &mut DRIVER_OBJECT) -> anyhow::Result<()> {
         FltOperationEntry::new(FltOperationType::Create, 0),
         FltOperationEntry::new(FltOperationType::Write, 0),
         FltOperationEntry::new(FltOperationType::Read, 0),
+        FltOperationEntry::new(FltOperationType::Cleanup, 0),
         FltOperationEntry::new(FltOperationType::Close, 0),
+        FltOperationEntry::new(FltOperationType::QueryFileInfo, 0),
+        FltOperationEntry::new(FltOperationType::SetFileInfo, 0),
+        FltOperationEntry::new(FltOperationType::AcquireForSectionSync, 0),
     ];
 
     MinifilterFrameworkBuilder::new_with_context(

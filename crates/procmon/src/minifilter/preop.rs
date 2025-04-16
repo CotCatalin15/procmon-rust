@@ -128,6 +128,31 @@ impl ProcmonMinifilterCallback {
                 offset: flt_write_file_request.offset(),
             },
             FltParameters::Close(flt_close_file_request) => EventFileSystemOperation::Close {},
+            FltParameters::Cleanup(flt_cleanup_file_request) => {
+                EventFileSystemOperation::Cleanup {}
+            }
+            FltParameters::QueryFileInfo(flt_query_file_information_request) => {
+                EventFileSystemOperation::QueryFileInfo {
+                    info_class: flt_query_file_information_request.file_information_class() as u32,
+                    buffer_len: flt_query_file_information_request.length(),
+                }
+            }
+            FltParameters::SetFileInfo(flt_set_file_information_request) => {
+                EventFileSystemOperation::SetFileInfo {
+                    info_class: flt_set_file_information_request.file_information_class() as _,
+                    length: flt_set_file_information_request.length(),
+                }
+            }
+            FltParameters::AcquireForSectionSync(
+                flt_acquire_for_section_synchronization_request,
+            ) => EventFileSystemOperation::AcquireForSectionSync {
+                sync_type: flt_acquire_for_section_synchronization_request.sync_type() as _,
+                page_protection: flt_acquire_for_section_synchronization_request.page_protection()
+                    as _,
+                flags: flt_acquire_for_section_synchronization_request.flags() as _,
+                allocation_attributes: flt_acquire_for_section_synchronization_request
+                    .allocation_attributes(),
+            },
         }
     }
 }

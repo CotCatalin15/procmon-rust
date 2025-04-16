@@ -25,6 +25,7 @@ use event_storage::EventStorage;
 use filters::SimpleFilter;
 use flume::bounded;
 use flume::unbounded;
+use flume::Sender;
 use kmum_common::KmMessage;
 use notifier::NotificationBus;
 use process::ProcessManager;
@@ -34,6 +35,7 @@ use rayon::ThreadPoolBuilder;
 use services::EventStorageService;
 use services::IndexerController;
 use std::num::NonZeroU32;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -87,8 +89,7 @@ fn main() {
         args.num_threads.get() as _,
     );
 
-    let communication =
-        EventCommunication::new(event_sender, Arc::new(FakeCommunication::new()), 2);
+    let communication = create_event_communication(event_sender, &args);
 
     eframe::run_native(
         "Procmon in Rust",
@@ -102,11 +103,38 @@ fn main() {
         Box::new(|_cc| {
             Ok(Box::new(ProcmonUi::new(
                 event_storage.clone(),
-                IndexerController::new(event_storage_bus, event_storage, 2),
+                IndexerController::new(event_storage_bus, event_storage, 6),
             )))
         }),
     )
     .unwrap();
+}
+
+fn create_event_communication(
+    event_sender: Sender<KmMessage>,
+    args: &ProcmonArgs,
+) -> EventCommunication {
+    let num_threads = args.num_threads.get() as usize;
+    match args.communication {
+        CommunicationType::Driver => EventCommunication::new(
+            event_sender,
+            Arc::new(DriverCommunication::new()),
+            num_threads,
+        ),
+        CommunicationType::Fake => EventCommunication::new(
+            event_sender,
+            Arc::new(FakeCommunication::new()),
+            num_threads,
+        ),
+        CommunicationType::DriverTest => {
+            let child = Command::new("procmon-tester.exe").spawn().unwrap();
+            EventCommunication::new(
+                event_sender,
+                Arc::new(DriverCommunication::new_test(child.id() as _)),
+                num_threads,
+            )
+        }
+    }
 }
 
 /*

@@ -14,7 +14,7 @@ pub fn get_communication_port_name() -> &'static U16CStr {
     nt_string::widestring::u16cstr!("\\PROCMONPORT")
 }
 
-pub const MAX_KM_MESSAGE_RECEIVE_SIZE: usize = 32 * 1024;
+pub const MAX_KM_MESSAGE_RECEIVE_SIZE: usize = 1 * 1024 * 1024;
 pub const MAX_UM_REPLY_MESSAGE_SIZE: usize = 32 * 1024;
 
 pub const MAX_UM_SEND_MESSAGE_BUFFER_SIZE: usize = 32 * 1024;

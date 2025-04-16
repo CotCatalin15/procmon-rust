@@ -18,6 +18,20 @@ command = "cargo"
 #make this
 args = ["make", "default", "--profile", "dev-abort"]
 
+[tasks.build-driver-release]
+description = "Builds the driver (procmon)"
+workspace = false
+cwd = "crates/procmon"
+command = "cargo"
+#make this
+args = ["make", "default", "--profile", "release-abort"]
+
+[tasks.build-usermode-release]
+description = "Builds the usermode applications (procmon-core and procmon-client)"
+workspace = false
+command = "cargo"
+args = ["build", "--workspace", "--exclude", "procmon", "--profile", "release"]
+
 [tasks.build-all]
 description = "Builds all crates (procmon-core, procmon-client, and procmon)"
 workspace = false

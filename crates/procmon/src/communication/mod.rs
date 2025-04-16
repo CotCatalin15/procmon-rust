@@ -1,5 +1,5 @@
 use core::{
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     u64,
 };
 
@@ -28,8 +28,11 @@ pub enum CommunicationError {
 
 pub struct Communication {
     messaging: AsyncMessaging,
+    client_connected: AtomicBool,
     filter_test_pid: AtomicU64,
 }
+
+const IGNORE_EVENT_PID: u64 = u64::MAX;
 
 struct CommunicationCallback {}
 
@@ -46,16 +49,23 @@ impl Communication {
 
         Ok(Self {
             messaging,
-            filter_test_pid: AtomicU64::new(u64::MAX),
+            client_connected: AtomicBool::new(false),
+            filter_test_pid: AtomicU64::new(IGNORE_EVENT_PID),
         })
     }
 
     pub fn try_send_event(&self, message: KmMessage) -> anyhow::Result<(), CommunicationError> {
-        let filter_pid = self.filter_test_pid.load(Ordering::Acquire);
-        if filter_pid != 0 && filter_pid != message.process.pid {
-            Ok(())
-        } else {
+        let client_connected = self.client_connected.load(Ordering::Relaxed);
+        let filter_pid = self.filter_test_pid.load(Ordering::Relaxed);
+
+        if !client_connected {
+            return Ok(());
+        }
+
+        if filter_pid == IGNORE_EVENT_PID || filter_pid == message.process.pid {
             self.messaging.try_emplace_event(message)
+        } else {
+            Ok(())
         }
     }
 
@@ -69,23 +79,26 @@ impl MessagingCallback for CommunicationCallback {
         info!("Client connected {:?}", data);
 
         if let Some(data) = data {
+            let communication = &DRIVER_CONTEXT.get().communication;
+
             match data {
                 ClientConnectMessage::Testing { filter_pid } => {
-                    DRIVER_CONTEXT
-                        .get()
-                        .communication
+                    communication
                         .filter_test_pid
                         .store(filter_pid, Ordering::Release);
                 }
-                ClientConnectMessage::Any => DRIVER_CONTEXT
-                    .get()
-                    .communication
+                ClientConnectMessage::Any => communication
                     .filter_test_pid
-                    .store(0, Ordering::Release),
+                    .store(IGNORE_EVENT_PID, Ordering::Release),
             }
-        }
 
-        Ok(())
+            communication
+                .client_connected
+                .store(true, Ordering::Release);
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg("Missing connect message"))
+        }
     }
 
     fn on_message(
@@ -144,12 +157,16 @@ impl MessagingCallback for CommunicationCallback {
     }
 
     fn on_disconnect(&self) {
+        let communication = &DRIVER_CONTEXT.get().communication;
+
         info!("Client disconnected");
-        DRIVER_CONTEXT
-            .get()
-            .communication
+        communication
             .filter_test_pid
             .store(u64::MAX, Ordering::Release);
+
+        communication
+            .client_connected
+            .store(false, Ordering::Release);
     }
 }
 
