@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use eframe::Frame;
-use egui_extras::{Column, TableBuilder};
+use egui_extras::{Column, TableBuilder, TableRow};
 use kmum_common::{
     event::{EventClass, EventFileSystemOperation, EventProcessOperation, EventRegistryOperation},
     KmMessage,
@@ -43,7 +43,7 @@ impl ProcmonUi {
 
 impl eframe::App for ProcmonUi {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
-        ctx.request_repaint_after_secs(1.0);
+        ctx.request_repaint_after_secs(0.0);
 
         let mut current_view = None;
 
@@ -67,7 +67,7 @@ impl eframe::App for ProcmonUi {
                     }
                 })
                 .body(|body| {
-                    body.rows(25.0, self.controller.num_events(), |mut row| {
+                    body.rows(25.0, self.controller.num_events(), |row| {
                         let index = row.index();
 
                         if current_view.is_none() {
@@ -84,72 +84,12 @@ impl eframe::App for ProcmonUi {
                             });
                         }
 
-                        current_view
+                        let event = current_view
                             .as_ref()
                             .unwrap()
-                            .read_event(index, &self.storage, |event| {
-                                //id
-                                row.col(|ui| {
-                                    ui.label(format!("{}", index));
-                                });
+                            .read_event(index, &self.storage);
 
-                                //timepstamp
-                                row.col(|ui| {
-                                    ui.label(format!(
-                                        "{}",
-                                        Self::filetime_to_datetime(event.event.date)
-                                    ));
-                                });
-
-                                //operations
-                                row.col(|ui| {
-                                    ui.label(Self::event_operation_to_str(&event.event.operation));
-                                });
-
-                                //process
-                                row.col(|ui| {
-                                    let hit = false;
-                                    /*self.runtime.cache().try_get_and(
-                                        event.process.unique_id,
-                                        |info| match info {
-                                            Some(info) => {
-                                                ui.label(format!("{}", info));
-                                            }
-                                            None => {
-                                                ui.label("Unknown");
-                                            }
-                                        },
-                                    );
-                                    */
-
-                                    let entry =
-                                        self.proc_manager.try_get_async(event.process.unique_id);
-
-                                    match entry {
-                                        crate::process::ProcessCacheEntry::Hit(
-                                            process_cache_information,
-                                        ) => match process_cache_information {
-                                            Some(info) => {
-                                                ui.label(format!("{}", info.get_process_name()))
-                                            }
-                                            None => ui.label("Unknown"),
-                                        },
-                                        crate::process::ProcessCacheEntry::Miss => {
-                                            ui.label("Loading...")
-                                        }
-                                    };
-                                });
-
-                                //pid
-                                row.col(|ui| {
-                                    ui.label(format!("{}", event.process.pid));
-                                });
-
-                                //path
-                                row.col(|ui| {
-                                    ui.label(format!("{}", event.event.path));
-                                });
-                            });
+                        self.render_event(index, event, row);
                     });
                 });
         });
@@ -220,16 +160,53 @@ impl ProcmonUi {
         // Convert to UTC DateTime
         Utc.from_utc_datetime(&naive)
     }
+
+    fn render_event(&self, index: usize, event: &KmMessage, mut row: TableRow) {
+        //id
+        row.col(|ui| {
+            ui.label(format!("{}", index));
+        });
+
+        //timepstamp
+        row.col(|ui| {
+            ui.label(format!("{}", Self::filetime_to_datetime(event.event.date)));
+        });
+
+        //operations
+        row.col(|ui| {
+            ui.label(Self::event_operation_to_str(&event.event.operation));
+        });
+
+        //process
+        row.col(|ui| {
+            let entry = self.proc_manager.try_get_async(event.process.unique_id);
+
+            match entry {
+                crate::process::ProcessCacheEntry::Hit(process_cache_information) => {
+                    match process_cache_information {
+                        Some(info) => ui.label(format!("{}", info.get_process_name())),
+                        None => ui.label("Unknown"),
+                    }
+                }
+                crate::process::ProcessCacheEntry::Miss => ui.label("Loading..."),
+            };
+        });
+
+        //pid
+        row.col(|ui| {
+            ui.label(format!("{}", event.process.pid));
+        });
+
+        //path
+        row.col(|ui| {
+            ui.label(format!("{}", event.event.path));
+        });
+    }
 }
 
 impl IndexStorageView {
-    pub fn read_event<R: FnOnce(&KmMessage)>(
-        &self,
-        index: usize,
-        storage: &EventStorage,
-        reader: R,
-    ) {
+    pub fn read_event<'a>(&self, index: usize, storage: &'a EventStorage) -> &'a KmMessage {
         let view = self.view[index - self.start_view];
-        storage.read_event(view.event_index, reader);
+        storage.read_event(view.event_index)
     }
 }

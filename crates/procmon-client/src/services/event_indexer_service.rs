@@ -1,4 +1,5 @@
 use std::{
+    net,
     ops::Deref,
     sync::Arc,
     thread::{spawn, JoinHandle},
@@ -55,7 +56,7 @@ impl EventIndexerService {
         index_data_receiver: Receiver<IndexData>,
         stop_receiver: Receiver<()>,
     ) {
-        const MAX_RECEIVE_SIZE: usize = 1024 * 2;
+        const MAX_RECEIVE_SIZE: usize = 1024 * 5;
         let mut index_buffer = Vec::with_capacity(MAX_RECEIVE_SIZE);
 
         tracing::info!("Starting index thread");
@@ -68,24 +69,32 @@ impl EventIndexerService {
             if new_index.is_none() {
                 break;
             }
+            let new_index = match new_index.unwrap() {
+                Ok(index) => index,
+                Err(_) => break,
+            };
+            index_buffer.push(new_index);
 
             index_data_receiver
                 .try_iter()
                 .take(MAX_RECEIVE_SIZE - 1)
                 .collect_into(&mut index_buffer);
 
-            index_buffer.sort_by(|lhs, rhs| lhs.event_timestamp.cmp(&rhs.event_timestamp));
-
             tracing::debug!("Indexing {} new events", index_buffer.len());
+
+            let pos = {
+                let ref_timestamp = index_buffer.first().unwrap().event_timestamp;
+                storage
+                    .read()
+                    .binary_search_by(|event| event.event_timestamp.cmp(&ref_timestamp))
+                    .unwrap_or_else(|error| error)
+            };
 
             let mut guard = storage.write();
 
-            for item in index_buffer.drain(..) {
-                let insert_pos = guard
-                    .binary_search_by(|probe| probe.event_timestamp.cmp(&item.event_timestamp))
-                    .unwrap_or_else(|e| e);
-                guard.insert(insert_pos, item);
-            }
+            guard.extend(index_buffer.drain(..));
+            guard.as_mut_slice()[pos..]
+                .sort_by(|lhs, rhs| lhs.event_timestamp.cmp(&rhs.event_timestamp));
         }
 
         tracing::info!("Stopping index thread");

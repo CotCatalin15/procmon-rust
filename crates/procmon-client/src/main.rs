@@ -1,12 +1,14 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 #![feature(iter_collect_into)]
+#![feature(maybe_uninit_slice)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
 mod app_ui;
 mod communication;
+mod container;
 mod event_storage;
 mod filters;
 mod notifier;
@@ -91,7 +93,7 @@ fn main() {
     );
 
     let (proc_manager, communication) =
-        create_communication_and_process_manager(event_sender, args);
+        create_communication_and_process_manager(event_sender, &args);
 
     eframe::run_native(
         "Procmon in Rust",
@@ -106,7 +108,11 @@ fn main() {
             Ok(Box::new(ProcmonUi::new(
                 event_storage.clone(),
                 proc_manager,
-                IndexerController::new(event_storage_bus, event_storage, 6),
+                IndexerController::new(
+                    event_storage_bus,
+                    event_storage,
+                    args.num_threads.get() as _,
+                ),
             )))
         }),
     )
@@ -115,7 +121,7 @@ fn main() {
 
 fn create_communication_and_process_manager(
     sender: Sender<KmMessage>,
-    args: ProcmonArgs,
+    args: &ProcmonArgs,
 ) -> (Arc<ProcessManager>, EventCommunication) {
     match args.communication {
         CommunicationType::Driver => {
@@ -138,7 +144,7 @@ fn create_communication_and_process_manager(
 fn impl_create_communication_and_process_manager<C: CommunicationInterface>(
     communication: C,
     sender: Sender<KmMessage>,
-    args: ProcmonArgs,
+    args: &ProcmonArgs,
 ) -> (Arc<ProcessManager>, EventCommunication) {
     let communication = Arc::new(communication);
 

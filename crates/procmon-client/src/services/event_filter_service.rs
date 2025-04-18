@@ -108,22 +108,22 @@ impl EventFilterService {
         tracing::debug!("Filtering {} -> {}", start_range, end_range);
 
         for index in start_range..end_range {
-            storage.read_event(index, |event| {
-                let mut visibile_event = true;
-                for filter in filters {
-                    if !filter.matches(event) {
-                        visibile_event = false;
-                        break;
-                    }
-                }
+            let event = storage.read_event(index);
 
-                if visibile_event {
-                    let _ = sender.send(IndexData {
-                        event_timestamp: event.event.date,
-                        event_index: index,
-                    });
+            let mut visibile_event = true;
+            for filter in filters {
+                if !filter.matches(event) {
+                    visibile_event = false;
+                    break;
                 }
-            });
+            }
+
+            if visibile_event {
+                let _ = sender.send(IndexData {
+                    event_timestamp: event.event.date,
+                    event_index: index,
+                });
+            }
         }
     }
 }
