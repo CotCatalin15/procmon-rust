@@ -33,7 +33,6 @@ pub mod panic;
 pub mod pscollector;
 
 fn driver_main(driver: &mut DRIVER_OBJECT, _registry_path: &UNICODE_STRING) -> anyhow::Result<()> {
-    dbg_break();
     init_logging()?;
 
     info!(name = "DriverMain", "Init driver something idk :(");

@@ -101,10 +101,6 @@ impl ProcessCollectorCache {
         let mut buffer: Vec<u8> = Vec::create();
         buffer.try_resize(1024 * 4, 0)?;
 
-        unsafe {
-            dbg_break();
-        }
-
         let mut returned_length = 0;
         loop {
             let status = unsafe {
