@@ -27,6 +27,7 @@ use filters::SimpleFilter;
 use flume::bounded;
 use flume::unbounded;
 use flume::Sender;
+use kmum_common::event::EventClass;
 use kmum_common::KmMessage;
 use kmum_common::KmReplyMessage;
 use kmum_common::UmSendMessage;
@@ -45,11 +46,13 @@ use tokio::sync::Semaphore;
 use tracing::info;
 use tracing::Level;
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, ValueEnum, PartialEq, Eq)]
 enum CommunicationType {
     Driver,
     Fake,
     DriverTest,
+    SelfTest,
+    Sysmon,
 }
 
 #[derive(Parser, Debug)]
@@ -60,6 +63,9 @@ struct ProcmonArgs {
 
     #[arg(short, long, default_value = "4")]
     num_threads: NonZeroU32,
+
+    #[arg(short, long)]
+    sysmon_args: Option<String>,
 }
 
 fn main() {
@@ -95,28 +101,49 @@ fn main() {
     let (proc_manager, communication) =
         create_communication_and_process_manager(event_sender, &args);
 
-    eframe::run_native(
-        "Procmon in Rust",
-        NativeOptions {
-            viewport: ViewportBuilder {
-                min_inner_size: Some([1000.0; 2].into()),
-                ..ViewportBuilder::default()
+    if args.communication == CommunicationType::Sysmon {
+        let mut controller = IndexerController::new(event_storage_bus, event_storage.clone(), 2);
+        let mut sysmon_proc = Command::new("SysmonSimulator.exe")
+            .args(["-eid", &args.sysmon_args.unwrap()])
+            .spawn()
+            .unwrap();
+        controller.change_filters(vec![SimpleFilter::FilterPid(sysmon_proc.id() as _)]);
+        sysmon_proc.wait().unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        let mut index_storage = Vec::new();
+        controller.collect_indicies_into(0, controller.num_events(), &mut index_storage);
+
+        println!("\n##############################");
+        index_storage.iter().for_each(|index| {
+            let event = event_storage.read_event(index.event_index);
+
+            println!("Event: {:?}", event);
+        });
+    } else if args.communication == CommunicationType::SelfTest {
+    } else {
+        eframe::run_native(
+            "Procmon in Rust",
+            NativeOptions {
+                viewport: ViewportBuilder {
+                    min_inner_size: Some([1000.0; 2].into()),
+                    ..ViewportBuilder::default()
+                },
+                ..NativeOptions::default()
             },
-            ..NativeOptions::default()
-        },
-        Box::new(|_cc| {
-            Ok(Box::new(ProcmonUi::new(
-                event_storage.clone(),
-                proc_manager,
-                IndexerController::new(
-                    event_storage_bus,
-                    event_storage,
-                    args.num_threads.get() as _,
-                ),
-            )))
-        }),
-    )
-    .unwrap();
+            Box::new(|_cc| {
+                Ok(Box::new(ProcmonUi::new(
+                    event_storage.clone(),
+                    proc_manager,
+                    IndexerController::new(
+                        event_storage_bus,
+                        event_storage,
+                        args.num_threads.get() as _,
+                    ),
+                )))
+            }),
+        )
+        .unwrap();
+    }
 }
 
 fn create_communication_and_process_manager(
@@ -137,6 +164,14 @@ fn create_communication_and_process_manager(
                 sender,
                 args,
             )
+        }
+        CommunicationType::SelfTest => impl_create_communication_and_process_manager(
+            DriverCommunication::new_test(std::process::id() as _),
+            sender,
+            args,
+        ),
+        CommunicationType::Sysmon => {
+            impl_create_communication_and_process_manager(DriverCommunication::new(), sender, args)
         }
     }
 }
@@ -167,3 +202,10 @@ fn impl_create_communication_and_process_manager<C: CommunicationInterface>(
 
     (Arc::new(process_manager), event_communication)
 }
+
+struct ExpectedEvent {
+    optional: bool,
+    event_class: EventClass,
+}
+
+fn run_selftest(controller: IndexerController, storage: Arc<EventStorage>) {}

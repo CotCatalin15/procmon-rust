@@ -64,7 +64,8 @@ fn init_logging() -> anyhow::Result<()> {
     let logger = DbgPrintLogger::new()?;
     DBGPRINT_LOGGER.init(&CONTEXT_REGISTRY, move || logger)?;
 
-    maple::consumer::set_global_consumer(DBGPRINT_LOGGER.get());
+    //disable logging
+    //maple::consumer::set_global_consumer(DBGPRINT_LOGGER.get());
 
     Ok(())
 }
